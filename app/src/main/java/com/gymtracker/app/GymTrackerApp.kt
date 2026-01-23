@@ -12,7 +12,9 @@ class GymTrackerApp : Application() {
         GymRepository(
             database.workoutDao(),
             database.exerciseDao(),
-            database.exerciseSetDao()
+            database.exerciseSetDao(),
+            database.sessionTemplateDao(),
+            database.templateExerciseDao()
         )
     }
 }

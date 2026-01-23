@@ -249,7 +249,7 @@ fun SetRow(
 }
 
 /**
- * Input numérique avec boutons +/-
+ * Input numérique avec champ de saisie directe
  */
 @Composable
 fun NumberInputWithButtons(
@@ -261,45 +261,85 @@ fun NumberInputWithButtons(
     isInteger: Boolean = false,
     modifier: Modifier = Modifier
 ) {
+    // Afficher vide si la valeur est 0, sinon afficher la valeur
+    var text by remember(value) {
+        mutableStateOf(
+            when {
+                value == 0f -> ""
+                isInteger -> "${value.toInt()}"
+                else -> "%.1f".format(value).replace(",", ".")
+            }
+        )
+    }
+
+    // Mettre à jour le texte quand la valeur externe change
+    LaunchedEffect(value) {
+        val newText = when {
+            value == 0f -> ""
+            isInteger -> "${value.toInt()}"
+            else -> "%.1f".format(value).replace(",", ".")
+        }
+        if (text != newText && (text.toFloatOrNull() ?: 0f) != value) {
+            text = newText
+        }
+    }
+
     Row(
         modifier = modifier.padding(horizontal = 4.dp),
         horizontalArrangement = Arrangement.Center,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // Bouton -
-        IconButton(
-            onClick = onDecrement,
-            modifier = Modifier.size(28.dp)
-        ) {
-            Icon(
-                Icons.Default.Remove,
-                contentDescription = "Diminuer",
-                tint = OnSurfaceVariant,
-                modifier = Modifier.size(16.dp)
-            )
-        }
-        
-        // Valeur
-        Text(
-            text = if (isInteger) "${value.toInt()}" else "%.1f".format(value) + if (suffix.isNotEmpty()) " $suffix" else "",
-            style = MaterialTheme.typography.bodyMedium,
-            fontWeight = FontWeight.Medium,
-            textAlign = TextAlign.Center,
-            modifier = Modifier.width(if (suffix.isNotEmpty()) 60.dp else 40.dp)
+        BasicTextField(
+            value = text,
+            onValueChange = { newText ->
+                // Accepter les chiffres, un point ou une virgule
+                val filtered = newText.filter { it.isDigit() || it == '.' || it == ',' }
+                    .replace(",", ".")
+                // Limiter à un seul point décimal
+                val parts = filtered.split(".")
+                val sanitized = if (parts.size > 2) {
+                    parts[0] + "." + parts.drop(1).joinToString("")
+                } else {
+                    filtered
+                }
+                text = sanitized.take(6) // Limiter la longueur
+
+                // Mettre à jour la valeur si c'est un nombre valide ou vide
+                val floatValue = sanitized.toFloatOrNull() ?: 0f
+                onValueChange(floatValue)
+            },
+            modifier = Modifier
+                .width(if (suffix.isNotEmpty()) 70.dp else 50.dp)
+                .height(32.dp)
+                .clip(RoundedCornerShape(6.dp))
+                .background(Background)
+                .padding(horizontal = 8.dp, vertical = 6.dp),
+            textStyle = MaterialTheme.typography.bodyMedium.copy(
+                color = OnSurface,
+                textAlign = TextAlign.Center,
+                fontWeight = FontWeight.Medium
+            ),
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+            singleLine = true,
+            cursorBrush = SolidColor(Primary),
+            decorationBox = { innerTextField ->
+                Row(
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(modifier = Modifier.weight(1f)) {
+                        innerTextField()
+                    }
+                    if (suffix.isNotEmpty()) {
+                        Text(
+                            text = suffix,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = OnSurfaceVariant
+                        )
+                    }
+                }
+            }
         )
-        
-        // Bouton +
-        IconButton(
-            onClick = onIncrement,
-            modifier = Modifier.size(28.dp)
-        ) {
-            Icon(
-                Icons.Default.Add,
-                contentDescription = "Augmenter",
-                tint = Primary,
-                modifier = Modifier.size(16.dp)
-            )
-        }
     }
 }
 

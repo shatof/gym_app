@@ -27,3 +27,26 @@ data class WorkoutWithExercises(
     )
     val exercises: List<ExerciseWithSets>
 )
+
+/**
+ * Relation entre un template et ses exercices
+ */
+data class TemplateWithExercises(
+    @Embedded val template: SessionTemplate,
+    @Relation(
+        parentColumn = "id",
+        entityColumn = "templateId"
+    )
+    val exercises: List<TemplateExercise>
+)
+
+/**
+ * Données pour récupérer les dernières valeurs d'un exercice
+ */
+data class LastExerciseValues(
+    val exerciseName: String,
+    val weight: Float,
+    val reps: Int,
+    val miorep: Int?
+)
+

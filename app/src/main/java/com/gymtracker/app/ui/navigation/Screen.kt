@@ -15,6 +15,12 @@ sealed class Screen(
         icon = Icons.Default.FitnessCenter
     )
     
+    object Templates : Screen(
+        route = "templates",
+        title = "Séances",
+        icon = Icons.Default.FolderOpen
+    )
+
     object History : Screen(
         route = "history",
         title = "Historique",
@@ -23,11 +29,17 @@ sealed class Screen(
     
     object Progress : Screen(
         route = "progress",
-        title = "Progression",
+        title = "Stats",
         icon = Icons.Default.TrendingUp
     )
     
+    object Settings : Screen(
+        route = "settings",
+        title = "Réglages",
+        icon = Icons.Default.Settings
+    )
+
     companion object {
-        val items = listOf(Workout, History, Progress)
+        val items = listOf(Workout, Templates, History, Progress, Settings)
     }
 }

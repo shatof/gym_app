@@ -1,21 +1,15 @@
 package com.gymtracker.app.ui.viewmodel
 
-import android.content.Context
-import android.content.Intent
-import android.net.Uri
-import androidx.core.content.FileProvider
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
-import com.google.gson.GsonBuilder
 import com.gymtracker.app.data.model.*
 import com.gymtracker.app.data.repository.GymRepository
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
-import java.io.File
-import java.text.SimpleDateFormat
-import java.util.*
 
+@OptIn(ExperimentalCoroutinesApi::class)
 class WorkoutViewModel(private val repository: GymRepository) : ViewModel() {
     
     // État de la séance active
@@ -38,6 +32,9 @@ class WorkoutViewModel(private val repository: GymRepository) : ViewModel() {
     // Noms d'exercices pour l'autocomplétion
     val exerciseNames: Flow<List<String>> = repository.allExerciseNames
     
+    // Templates disponibles
+    val allTemplates: Flow<List<TemplateWithExercises>> = repository.allTemplatesWithExercises
+
     // Messages UI
     private val _uiMessage = MutableSharedFlow<String>()
     val uiMessage: SharedFlow<String> = _uiMessage.asSharedFlow()
@@ -62,13 +59,26 @@ class WorkoutViewModel(private val repository: GymRepository) : ViewModel() {
         }
     }
     
-    fun finishWorkout() {
+    fun startWorkoutFromTemplate(templateId: Long) {
+        viewModelScope.launch {
+            try {
+                val workoutId = repository.createWorkoutFromTemplate(templateId)
+                _activeWorkoutId.value = workoutId
+                _workoutStartTime.value = System.currentTimeMillis()
+                _uiMessage.emit("Séance démarrée")
+            } catch (e: Exception) {
+                _uiMessage.emit("Erreur: ${e.message}")
+            }
+        }
+    }
+
+    fun finishWorkout(notes: String = "") {
         viewModelScope.launch {
             _activeWorkoutId.value?.let { workoutId ->
                 val duration = _workoutStartTime.value?.let {
                     ((System.currentTimeMillis() - it) / 60000).toInt()
                 } ?: 0
-                repository.completeWorkout(workoutId, duration)
+                repository.completeWorkout(workoutId, duration, notes)
                 _activeWorkoutId.value = null
                 _workoutStartTime.value = null
                 _uiMessage.emit("Séance terminée ! Durée: $duration minutes")
@@ -85,12 +95,19 @@ class WorkoutViewModel(private val repository: GymRepository) : ViewModel() {
     
     // === Gestion des exercices ===
     
-    fun addExercise(name: String) {
+    fun addExercise(name: String, restTimeSeconds: Int = 90) {
         viewModelScope.launch {
             _activeWorkoutId.value?.let { workoutId ->
-                val exerciseId = repository.addExercise(workoutId, name)
-                // Ajouter automatiquement une première série
-                repository.addSet(exerciseId)
+                val exerciseId = repository.addExercise(workoutId, name, restTimeSeconds)
+
+                // Récupérer les dernières valeurs pour cet exercice
+                val lastSet = repository.getLastSetValuesForExercise(name)
+                val defaultWeight = lastSet?.weight ?: 0f
+                val defaultReps = lastSet?.reps ?: 0
+                val defaultMiorep = lastSet?.miorep
+
+                // Ajouter automatiquement une première série avec les dernières valeurs
+                repository.addSet(exerciseId, defaultReps, defaultWeight, defaultMiorep)
             }
         }
     }
@@ -174,46 +191,7 @@ class WorkoutViewModel(private val repository: GymRepository) : ViewModel() {
         }
     }
     
-    // === Export JSON ===
-    
-    fun exportToJson(context: Context) {
-        viewModelScope.launch {
-            try {
-                val exportData = repository.exportAllData()
-                val gson = GsonBuilder().setPrettyPrinting().create()
-                val json = gson.toJson(exportData)
-                
-                // Créer le fichier
-                val dateFormat = SimpleDateFormat("yyyy-MM-dd_HH-mm", Locale.getDefault())
-                val fileName = "gym_tracker_export_${dateFormat.format(Date())}.json"
-                
-                val exportDir = File(context.cacheDir, "exports")
-                exportDir.mkdirs()
-                val file = File(exportDir, fileName)
-                file.writeText(json)
-                
-                // Partager le fichier
-                val uri = FileProvider.getUriForFile(
-                    context,
-                    "${context.packageName}.fileprovider",
-                    file
-                )
-                
-                val shareIntent = Intent(Intent.ACTION_SEND).apply {
-                    type = "application/json"
-                    putExtra(Intent.EXTRA_STREAM, uri)
-                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                }
-                
-                context.startActivity(Intent.createChooser(shareIntent, "Exporter les données"))
-                _uiMessage.emit("Export créé : $fileName")
-                
-            } catch (e: Exception) {
-                _uiMessage.emit("Erreur lors de l'export : ${e.message}")
-            }
-        }
-    }
-    
+
     // Factory
     companion object {
         fun provideFactory(repository: GymRepository): ViewModelProvider.Factory {

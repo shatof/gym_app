@@ -38,6 +38,9 @@ interface WorkoutDao {
     @Query("SELECT * FROM workouts WHERE isCompleted = 0 LIMIT 1")
     suspend fun getActiveWorkout(): Workout?
     
-    @Query("UPDATE workouts SET isCompleted = 1, durationMinutes = :duration WHERE id = :workoutId")
-    suspend fun completeWorkout(workoutId: Long, duration: Int)
+    @Query("UPDATE workouts SET isCompleted = 1, durationMinutes = :duration, notes = :notes WHERE id = :workoutId")
+    suspend fun completeWorkout(workoutId: Long, duration: Int, notes: String)
+
+    @Query("DELETE FROM workouts")
+    suspend fun deleteAll()
 }

@@ -6,25 +6,26 @@ import androidx.room.Index
 import androidx.room.PrimaryKey
 
 /**
- * Représente un exercice dans une séance
+ * Représente un exercice dans un template de séance
  */
 @Entity(
-    tableName = "exercises",
+    tableName = "template_exercises",
     foreignKeys = [
         ForeignKey(
-            entity = Workout::class,
+            entity = SessionTemplate::class,
             parentColumns = ["id"],
-            childColumns = ["workoutId"],
+            childColumns = ["templateId"],
             onDelete = ForeignKey.CASCADE
         )
     ],
-    indices = [Index("workoutId")]
+    indices = [Index("templateId")]
 )
-data class Exercise(
+data class TemplateExercise(
     @PrimaryKey(autoGenerate = true)
     val id: Long = 0,
-    val workoutId: Long,
+    val templateId: Long,
     val name: String,
     val orderIndex: Int = 0,
+    val defaultSetsCount: Int = 3, // Nombre de séries par défaut
     val restTimeSeconds: Int = 180 // Temps de repos entre séries en secondes
 )

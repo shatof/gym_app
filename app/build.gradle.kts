@@ -78,6 +78,12 @@ dependencies {
     // Gson for JSON
     implementation("com.google.code.gson:gson:2.10.1")
     
+    // DataStore Preferences
+    implementation("androidx.datastore:datastore-preferences:1.0.0")
+
+    // Coil for image loading
+    implementation("io.coil-kt:coil-compose:2.5.0")
+
     // Charts - Vico
     implementation("com.patrykandpatrick.vico:compose:1.13.1")
     implementation("com.patrykandpatrick.vico:compose-m3:1.13.1")

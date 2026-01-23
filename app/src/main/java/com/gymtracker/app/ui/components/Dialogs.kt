@@ -20,6 +20,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import com.gymtracker.app.ui.theme.*
@@ -31,19 +32,35 @@ import com.gymtracker.app.ui.theme.*
 @Composable
 fun AddExerciseDialog(
     onDismiss: () -> Unit,
-    onConfirm: (String) -> Unit,
-    existingExerciseNames: List<String>
+    onConfirm: (name: String, restTimeSeconds: Int) -> Unit,
+    existingExerciseNames: List<String>,
+    commonExercises: List<String> = com.gymtracker.app.data.SettingsManager.DEFAULT_EXERCISES
 ) {
     var exerciseName by remember { mutableStateOf("") }
+    var restTimeSeconds by remember { mutableStateOf("180") }
     var showSuggestions by remember { mutableStateOf(false) }
     val focusRequester = remember { FocusRequester() }
     val keyboardController = LocalSoftwareKeyboardController.current
     
-    val filteredSuggestions = remember(exerciseName, existingExerciseNames) {
+    // Suggestions triées par priorité : exercices par défaut > existants > tous
+    val filteredSuggestions = remember(exerciseName, existingExerciseNames, commonExercises) {
         if (exerciseName.length >= 2) {
-            existingExerciseNames.filter { 
-                it.contains(exerciseName, ignoreCase = true) 
-            }.take(5)
+            val allExercises = com.gymtracker.app.data.SettingsManager.ALL_EXERCISES
+
+            // D'abord les exercices par défaut qui matchent
+            val fromDefault = commonExercises.filter {
+                it.contains(exerciseName, ignoreCase = true) && it != exerciseName
+            }
+            // Ensuite les exercices existants
+            val fromExisting = existingExerciseNames.filter {
+                it.contains(exerciseName, ignoreCase = true) && it != exerciseName && !fromDefault.contains(it)
+            }
+            // Enfin tous les autres
+            val fromAll = allExercises.filter {
+                it.contains(exerciseName, ignoreCase = true) && it != exerciseName && !fromDefault.contains(it) && !fromExisting.contains(it)
+            }
+
+            (fromDefault + fromExisting + fromAll).take(3)
         } else {
             emptyList()
         }
@@ -84,22 +101,14 @@ fun AddExerciseDialog(
                     label = { Text("Nom de l'exercice") },
                     placeholder = { Text("ex: Développé couché") },
                     singleLine = true,
-                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-                    keyboardActions = KeyboardActions(
-                        onDone = {
-                            if (exerciseName.isNotBlank()) {
-                                keyboardController?.hide()
-                                onConfirm(exerciseName.trim())
-                            }
-                        }
-                    ),
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedBorderColor = Primary,
                         cursorColor = Primary
                     )
                 )
                 
-                // Suggestions d'exercices existants
+                // Suggestions d'exercices (max 3)
                 if (showSuggestions && filteredSuggestions.isNotEmpty()) {
                     Spacer(modifier = Modifier.height(8.dp))
                     
@@ -136,6 +145,39 @@ fun AddExerciseDialog(
                     }
                 }
                 
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // Temps de repos
+                OutlinedTextField(
+                    value = restTimeSeconds,
+                    onValueChange = { newValue ->
+                        restTimeSeconds = newValue.filter { it.isDigit() }.take(3)
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    label = { Text("Temps de repos (secondes)") },
+                    placeholder = { Text("180") },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(
+                        keyboardType = KeyboardType.Number,
+                        imeAction = ImeAction.Done
+                    ),
+                    keyboardActions = KeyboardActions(
+                        onDone = {
+                            if (exerciseName.isNotBlank()) {
+                                keyboardController?.hide()
+                                onConfirm(exerciseName.trim(), restTimeSeconds.toIntOrNull() ?: 180)
+                            }
+                        }
+                    ),
+                    leadingIcon = {
+                        Icon(Icons.Default.Timer, contentDescription = null)
+                    },
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = Primary,
+                        cursorColor = Primary
+                    )
+                )
+
                 // Exercices courants
                 if (exerciseName.isEmpty()) {
                     Spacer(modifier = Modifier.height(16.dp))
@@ -147,17 +189,6 @@ fun AddExerciseDialog(
                     )
                     
                     Spacer(modifier = Modifier.height(8.dp))
-                    
-                    val commonExercises = listOf(
-                        "Développé couché",
-                        "Squat",
-                        "Soulevé de terre",
-                        "Rowing barre",
-                        "Développé épaules",
-                        "Curl biceps",
-                        "Extension triceps",
-                        "Leg press"
-                    )
                     
                     FlowRow(
                         modifier = Modifier.fillMaxWidth(),
@@ -190,7 +221,7 @@ fun AddExerciseDialog(
                     Button(
                         onClick = {
                             if (exerciseName.isNotBlank()) {
-                                onConfirm(exerciseName.trim())
+                                onConfirm(exerciseName.trim(), restTimeSeconds.toIntOrNull() ?: 180)
                             }
                         },
                         enabled = exerciseName.isNotBlank(),
