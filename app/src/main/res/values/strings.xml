@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Gym Tracker</string>
+    <string name="workout_tab">Séance</string>
+    <string name="history_tab">Historique</string>
+    <string name="progress_tab">Progression</string>
+    <string name="add_exercise">Ajouter exercice</string>
+    <string name="exercise_name">Nom de l\'exercice</string>
+    <string name="weight_kg">Poids (kg)</string>
+    <string name="reps">Répétitions</string>
+    <string name="miorep">Miorep</string>
+    <string name="set_number">Série %d</string>
+    <string name="add_set">+ Série</string>
+    <string name="save_workout">Sauvegarder</string>
+    <string name="export_json">Exporter JSON</string>
+    <string name="no_exercises">Aucun exercice</string>
+    <string name="start_workout">Commencer une séance</string>
+    <string name="finish_workout">Terminer la séance</string>
+</resources>

@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="48dp"
+    android:height="48dp"
+    android:viewportWidth="48"
+    android:viewportHeight="48">
+    
+    <!-- Background circle -->
+    <path
+        android:fillColor="#4CAF50"
+        android:pathData="M24,24m-24,0a24,24 0,1 1,48 0a24,24 0,1 1,-48 0"/>
+    
+    <!-- Dumbbell -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M12,23 L36,23 L36,25 L12,25 Z"/>
+    
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M10,18 L15,18 L15,30 L10,30 Z"/>
+    
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M7,20 L11,20 L11,28 L7,28 Z"/>
+    
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M33,18 L38,18 L38,30 L33,30 Z"/>
+    
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M37,20 L41,20 L41,28 L37,28 Z"/>
+</vector>
