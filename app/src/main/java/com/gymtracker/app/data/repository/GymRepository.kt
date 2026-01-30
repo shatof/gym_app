@@ -99,9 +99,14 @@ class GymRepository(
                             val sets = exerciseWithSets.sets.filter { it.isCompleted }
                             if (sets.isNotEmpty()) {
                                 val maxWeight = sets.maxOf { it.weight }
-                                val totalVolume = sets.sumOf { (it.weight * it.reps).toDouble() }.toFloat()
-                                val bestSet = sets.maxByOrNull { calculate1RM(it.weight, it.reps) }
-                                
+                                // Volume total prend en compte les mioreps (1 miorep = 1/3 rep)
+                                val totalVolume = sets.sumOf { set ->
+                                    val effectiveReps = calculateEffectiveReps(set.reps, set.miorep)
+                                    (set.weight * effectiveReps).toDouble()
+                                }.toFloat()
+                                // Le meilleur set est celui avec le meilleur 1RM estimé (incluant mioreps)
+                                val bestSet = sets.maxByOrNull { calculate1RM(it.weight, it.reps, it.miorep) }
+
                                 ProgressDataPoint(
                                     date = workout.workout.date,
                                     maxWeight = maxWeight,
@@ -109,7 +114,8 @@ class GymRepository(
                                     bestSet = BestSetInfo(
                                         weight = bestSet?.weight ?: 0f,
                                         reps = bestSet?.reps ?: 0,
-                                        estimated1RM = bestSet?.let { calculate1RM(it.weight, it.reps) } ?: 0f
+                                        miorep = bestSet?.miorep,
+                                        estimated1RM = bestSet?.let { calculate1RM(it.weight, it.reps, it.miorep) } ?: 0f
                                     )
                                 )
                             } else null

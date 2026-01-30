@@ -41,6 +41,7 @@ fun ExerciseCard(
     onDecrementReps: (ExerciseSet) -> Unit,
     onIncrementWeight: (ExerciseSet) -> Unit,
     onDecrementWeight: (ExerciseSet) -> Unit,
+    onRestTimerStart: (Int) -> Unit = {}, // Callback pour démarrer le timer de repos
     modifier: Modifier = Modifier
 ) {
     var showDeleteDialog by remember { mutableStateOf(false) }
@@ -121,7 +122,13 @@ fun ExerciseCard(
                 SetRow(
                     set = set,
                     onSetUpdated = onSetUpdated,
-                    onSetCompleted = { onSetCompleted(set.id, it) },
+                    onSetCompleted = { completed ->
+                        onSetCompleted(set.id, completed)
+                        // Démarrer le timer de repos si le set vient d'être complété
+                        if (completed) {
+                            onRestTimerStart(exerciseWithSets.exercise.restTimeSeconds)
+                        }
+                    },
                     onDelete = { onDeleteSet(set) },
                     onIncrementReps = { onIncrementReps(set) },
                     onDecrementReps = { onDecrementReps(set) },

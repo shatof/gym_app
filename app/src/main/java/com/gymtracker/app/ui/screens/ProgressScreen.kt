@@ -451,8 +451,13 @@ fun DataPointCard(
                         style = MaterialTheme.typography.bodyMedium,
                         fontWeight = FontWeight.Bold
                     )
+                    val repsText = if (dataPoint.bestSet.miorep != null && dataPoint.bestSet.miorep > 0) {
+                        "${dataPoint.bestSet.reps} reps + ${dataPoint.bestSet.miorep} mio"
+                    } else {
+                        "${dataPoint.bestSet.reps} reps"
+                    }
                     Text(
-                        text = "${dataPoint.bestSet.reps} reps",
+                        text = repsText,
                         style = MaterialTheme.typography.labelSmall,
                         color = OnSurfaceVariant
                     )

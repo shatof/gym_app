@@ -282,3 +282,105 @@ fun WorkoutTimer(
         }
     }
 }
+
+/**
+ * Timer de repos entre séries
+ */
+@Composable
+fun RestTimer(
+    totalSeconds: Int,
+    onDismiss: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    var remainingSeconds by remember { mutableStateOf(totalSeconds) }
+    var isFinished by remember { mutableStateOf(false) }
+
+    LaunchedEffect(Unit) {
+        while (remainingSeconds > 0) {
+            kotlinx.coroutines.delay(1000)
+            remainingSeconds--
+        }
+        isFinished = true
+    }
+
+    val minutes = remainingSeconds / 60
+    val seconds = remainingSeconds % 60
+    val progress = remainingSeconds.toFloat() / totalSeconds.toFloat()
+
+    Card(
+        modifier = modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = if (isFinished) Completed.copy(alpha = 0.2f) else Surface
+        ),
+        shape = RoundedCornerShape(16.dp)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        if (isFinished) Icons.Default.CheckCircle else Icons.Default.Timer,
+                        contentDescription = null,
+                        tint = if (isFinished) Completed else Primary,
+                        modifier = Modifier.size(24.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = if (isFinished) "Repos terminé !" else "Repos",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = if (isFinished) Completed else OnSurface
+                    )
+                }
+
+                IconButton(onClick = onDismiss) {
+                    Icon(
+                        Icons.Default.Close,
+                        contentDescription = "Fermer",
+                        tint = OnSurfaceVariant
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // Timer display
+            Text(
+                text = "%02d:%02d".format(minutes, seconds),
+                style = MaterialTheme.typography.displayMedium,
+                color = if (isFinished) Completed else Primary
+            )
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // Barre de progression
+            LinearProgressIndicator(
+                progress = progress,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(8.dp)
+                    .clip(RoundedCornerShape(4.dp)),
+                color = if (isFinished) Completed else Primary,
+                trackColor = SurfaceVariant
+            )
+
+            if (isFinished) {
+                Spacer(modifier = Modifier.height(12.dp))
+                Button(
+                    onClick = onDismiss,
+                    colors = ButtonDefaults.buttonColors(containerColor = Completed)
+                ) {
+                    Text("C'est parti !")
+                }
+            }
+        }
+    }
+}
+

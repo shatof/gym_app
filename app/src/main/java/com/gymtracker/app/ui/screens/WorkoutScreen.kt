@@ -51,6 +51,9 @@ fun WorkoutScreen(
     var showNotesDialog by remember { mutableStateOf(false) }
     var workoutNotes by remember { mutableStateOf("") }
 
+    // État pour le timer de repos
+    var restTimerSeconds by remember { mutableStateOf<Int?>(null) }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -247,10 +250,23 @@ fun WorkoutScreen(
                         onIncrementReps = { viewModel.incrementReps(it) },
                         onDecrementReps = { viewModel.decrementReps(it) },
                         onIncrementWeight = { viewModel.incrementWeight(it) },
-                        onDecrementWeight = { viewModel.decrementWeight(it) }
+                        onDecrementWeight = { viewModel.decrementWeight(it) },
+                        onRestTimerStart = { seconds ->
+                            restTimerSeconds = seconds
+                        }
                     )
                 }
-                
+
+                // Timer de repos
+                if (restTimerSeconds != null) {
+                    item {
+                        RestTimer(
+                            totalSeconds = restTimerSeconds!!,
+                            onDismiss = { restTimerSeconds = null }
+                        )
+                    }
+                }
+
                 // Bouton ajouter exercice
                 item {
                     AddExerciseButton(
