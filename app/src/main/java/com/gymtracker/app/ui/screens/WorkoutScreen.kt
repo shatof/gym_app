@@ -51,8 +51,8 @@ fun WorkoutScreen(
     var showNotesDialog by remember { mutableStateOf(false) }
     var workoutNotes by remember { mutableStateOf("") }
 
-    // État pour le timer de repos
-    var restTimerSeconds by remember { mutableStateOf<Int?>(null) }
+    // État pour le timer de repos - stocke l'ID de l'exercice et les secondes
+    var restTimerState by remember { mutableStateOf<Pair<Long, Int>?>(null) } // Pair(exerciseId, seconds)
 
     Scaffold(
         topBar = {
@@ -233,37 +233,37 @@ fun WorkoutScreen(
                 verticalArrangement = Arrangement.spacedBy(16.dp),
                 contentPadding = PaddingValues(vertical = 16.dp)
             ) {
-                // Liste des exercices
-                items(
-                    items = exercises,
-                    key = { it.exercise.id }
-                ) { exerciseWithSets ->
-                    ExerciseCard(
-                        exerciseWithSets = exerciseWithSets,
-                        onAddSet = { viewModel.addSet(exerciseWithSets.exercise.id) },
-                        onDeleteExercise = { viewModel.deleteExercise(exerciseWithSets.exercise) },
-                        onSetUpdated = { viewModel.updateSet(it) },
-                        onSetCompleted = { setId, completed -> 
-                            viewModel.toggleSetCompletion(setId, completed) 
-                        },
-                        onDeleteSet = { viewModel.deleteSet(it) },
-                        onIncrementReps = { viewModel.incrementReps(it) },
-                        onDecrementReps = { viewModel.decrementReps(it) },
-                        onIncrementWeight = { viewModel.incrementWeight(it) },
-                        onDecrementWeight = { viewModel.decrementWeight(it) },
-                        onRestTimerStart = { seconds ->
-                            restTimerSeconds = seconds
-                        }
-                    )
-                }
+                // Liste des exercices avec timer intégré
+                exercises.forEach { exerciseWithSets ->
+                    item(key = exerciseWithSets.exercise.id) {
+                        Column {
+                            ExerciseCard(
+                                exerciseWithSets = exerciseWithSets,
+                                onAddSet = { viewModel.addSet(exerciseWithSets.exercise.id) },
+                                onDeleteExercise = { viewModel.deleteExercise(exerciseWithSets.exercise) },
+                                onSetUpdated = { viewModel.updateSet(it) },
+                                onSetCompleted = { setId, completed ->
+                                    viewModel.toggleSetCompletion(setId, completed)
+                                },
+                                onDeleteSet = { viewModel.deleteSet(it) },
+                                onIncrementReps = { viewModel.incrementReps(it) },
+                                onDecrementReps = { viewModel.decrementReps(it) },
+                                onIncrementWeight = { viewModel.incrementWeight(it) },
+                                onDecrementWeight = { viewModel.decrementWeight(it) },
+                                onRestTimerStart = { seconds ->
+                                    restTimerState = Pair(exerciseWithSets.exercise.id, seconds)
+                                }
+                            )
 
-                // Timer de repos
-                if (restTimerSeconds != null) {
-                    item {
-                        RestTimer(
-                            totalSeconds = restTimerSeconds!!,
-                            onDismiss = { restTimerSeconds = null }
-                        )
+                            // Timer de repos affiché juste en dessous de l'exercice concerné
+                            if (restTimerState?.first == exerciseWithSets.exercise.id) {
+                                Spacer(modifier = Modifier.height(8.dp))
+                                RestTimer(
+                                    totalSeconds = restTimerState!!.second,
+                                    onDismiss = { restTimerState = null }
+                                )
+                            }
+                        }
                     }
                 }
 
