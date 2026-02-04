@@ -1,9 +1,12 @@
 package com.gymtracker.app.ui.screens
 
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -11,6 +14,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
@@ -35,6 +39,15 @@ fun TemplateScreen(
     var showCreateTemplateDialog by remember { mutableStateOf(false) }
     var showAddExerciseDialog by remember { mutableStateOf(false) }
     var templateToDelete by remember { mutableStateOf<SessionTemplate?>(null) }
+
+    // Couleurs pour les groupes de superset
+    val supersetColors = listOf(
+        Color(0xFFE91E63), // Pink
+        Color(0xFF2196F3), // Blue
+        Color(0xFFFF9800), // Orange
+        Color(0xFF9C27B0), // Purple
+        Color(0xFF00BCD4)  // Cyan
+    )
 
     Scaffold(
         topBar = {
@@ -178,7 +191,30 @@ fun TemplateScreen(
                         }
                     }
                 } else {
-                    items(editingExercises, key = { it.id }) { exercise ->
+                    // Trouver le groupe superset actif (le dernier groupe qui a des exercices)
+                    val activeSupersetsGroups = editingExercises
+                        .mapNotNull { it.supersetGroupId }
+                        .distinct()
+                        .sorted()
+
+                    // Le groupe actif est le dernier groupe qui n'a qu'un seul exercice (en attente d'un partenaire)
+                    // ou null s'il n'y a pas de groupe en attente
+                    val lastGroupWithOneExercise = activeSupersetsGroups.lastOrNull { groupId ->
+                        editingExercises.count { it.supersetGroupId == groupId } == 1
+                    }
+
+                    val sortedExercises = editingExercises.sortedBy { it.orderIndex }
+
+                    itemsIndexed(sortedExercises, key = { _, ex -> ex.id }) { index, exercise ->
+                        val supersetColor = exercise.supersetGroupId?.let { groupId ->
+                            supersetColors.getOrNull((groupId - 1) % supersetColors.size)
+                        }
+
+                        // Compter combien d'exercices sont dans le même groupe
+                        val exercisesInSameGroup = exercise.supersetGroupId?.let { groupId ->
+                            editingExercises.count { it.supersetGroupId == groupId }
+                        } ?: 0
+
                         TemplateExerciseCard(
                             exercise = exercise,
                             onDelete = { viewModel.deleteTemplateExercise(exercise) },
@@ -187,7 +223,39 @@ fun TemplateScreen(
                             },
                             onUpdateRestTime = { newRestTime ->
                                 viewModel.updateTemplateExercise(exercise.copy(restTimeSeconds = newRestTime))
-                            }
+                            },
+                            onToggleSuperset = {
+                                val newGroupId = if (exercise.supersetGroupId != null) {
+                                    // Déjà dans un superset -> le retirer
+                                    null
+                                } else {
+                                    // Pas dans un superset -> rejoindre le groupe en attente ou créer un nouveau
+                                    if (lastGroupWithOneExercise != null) {
+                                        // Rejoindre le groupe existant qui attend un partenaire
+                                        lastGroupWithOneExercise
+                                    } else {
+                                        // Créer un nouveau groupe
+                                        val maxGroup = editingExercises.mapNotNull { it.supersetGroupId }.maxOrNull() ?: 0
+                                        maxGroup + 1
+                                    }
+                                }
+                                viewModel.updateTemplateExercise(exercise.copy(supersetGroupId = newGroupId))
+                            },
+                            onMoveUp = if (index > 0) {
+                                {
+                                    val previousExercise = sortedExercises[index - 1]
+                                    viewModel.swapExerciseOrder(exercise, previousExercise)
+                                }
+                            } else null,
+                            onMoveDown = if (index < sortedExercises.size - 1) {
+                                {
+                                    val nextExercise = sortedExercises[index + 1]
+                                    viewModel.swapExerciseOrder(exercise, nextExercise)
+                                }
+                            } else null,
+                            supersetGroupId = exercise.supersetGroupId,
+                            supersetColor = supersetColor,
+                            supersetMemberCount = exercisesInSameGroup
                         )
                     }
                 }
@@ -363,110 +431,194 @@ private fun TemplateExerciseCard(
     exercise: TemplateExercise,
     onDelete: () -> Unit,
     onUpdateSetsCount: (Int) -> Unit,
-    onUpdateRestTime: (Int) -> Unit
+    onUpdateRestTime: (Int) -> Unit,
+    onToggleSuperset: () -> Unit = {},
+    onMoveUp: (() -> Unit)? = null,
+    onMoveDown: (() -> Unit)? = null,
+    supersetGroupId: Int? = null,
+    supersetColor: Color? = null,
+    supersetMemberCount: Int = 0
 ) {
+    val isWaitingForPartner = supersetGroupId != null && supersetMemberCount == 1
+    val isLinked = supersetGroupId != null && supersetMemberCount >= 2
+
     Card(
         modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = Surface)
+        colors = CardDefaults.cardColors(containerColor = Surface),
+        border = if (supersetGroupId != null && supersetColor != null) {
+            BorderStroke(2.dp, if (isWaitingForPartner) supersetColor.copy(alpha = 0.5f) else supersetColor)
+        } else null
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = exercise.name,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold
-                )
-
+        Column {
+            // Indicateur de superset
+            if (supersetGroupId != null && supersetColor != null) {
                 Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    Text(
-                        text = "Séries:",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = OnSurfaceVariant
-                    )
-
-                    IconButton(
-                        onClick = { if (exercise.defaultSetsCount > 1) onUpdateSetsCount(exercise.defaultSetsCount - 1) },
-                        modifier = Modifier.size(32.dp),
-                        enabled = exercise.defaultSetsCount > 1
-                    ) {
-                        Icon(
-                            Icons.Default.Remove,
-                            contentDescription = "Moins",
-                            modifier = Modifier.size(16.dp),
-                            tint = if (exercise.defaultSetsCount > 1) OnSurfaceVariant else OnSurfaceVariant.copy(alpha = 0.3f)
-                        )
-                    }
-
-                    Text(
-                        text = "${exercise.defaultSetsCount}",
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = FontWeight.Bold,
-                        modifier = Modifier.width(24.dp),
-                        textAlign = TextAlign.Center
-                    )
-
-                    IconButton(
-                        onClick = { onUpdateSetsCount(exercise.defaultSetsCount + 1) },
-                        modifier = Modifier.size(32.dp)
-                    ) {
-                        Icon(Icons.Default.Add, contentDescription = "Plus", modifier = Modifier.size(16.dp))
-                    }
-                }
-
-                // Temps de repos
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(supersetColor.copy(alpha = if (isWaitingForPartner) 0.1f else 0.2f))
+                        .padding(horizontal = 16.dp, vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
                     Icon(
-                        Icons.Default.Timer,
+                        if (isLinked) Icons.Default.Link else Icons.Default.HourglassEmpty,
                         contentDescription = null,
-                        modifier = Modifier.size(16.dp),
-                        tint = OnSurfaceVariant
+                        modifier = Modifier.size(14.dp),
+                        tint = supersetColor
                     )
+                    Spacer(modifier = Modifier.width(4.dp))
                     Text(
-                        text = "Repos:",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = OnSurfaceVariant
+                        text = if (isWaitingForPartner) {
+                            "Superset $supersetGroupId - En attente d'un exercice..."
+                        } else {
+                            "Superset $supersetGroupId ($supersetMemberCount exercices)"
+                        },
+                        style = MaterialTheme.typography.labelSmall,
+                        color = supersetColor
                     )
-
-                    IconButton(
-                        onClick = { if (exercise.restTimeSeconds > 15) onUpdateRestTime(exercise.restTimeSeconds - 15) },
-                        modifier = Modifier.size(32.dp)
-                    ) {
-                        Icon(Icons.Default.Remove, contentDescription = "Moins", modifier = Modifier.size(16.dp))
-                    }
-
-                    Text(
-                        text = "${exercise.restTimeSeconds}s",
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = FontWeight.Bold
-                    )
-
-                    IconButton(
-                        onClick = { onUpdateRestTime(exercise.restTimeSeconds + 15) },
-                        modifier = Modifier.size(32.dp)
-                    ) {
-                        Icon(Icons.Default.Add, contentDescription = "Plus", modifier = Modifier.size(16.dp))
-                    }
                 }
             }
 
-            IconButton(onClick = onDelete) {
-                Icon(
-                    Icons.Default.Delete,
-                    contentDescription = "Supprimer",
-                    tint = MaterialTheme.colorScheme.error
-                )
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // Boutons de réordonnancement à gauche
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier.padding(end = 8.dp)
+                ) {
+                    IconButton(
+                        onClick = { onMoveUp?.invoke() },
+                        enabled = onMoveUp != null,
+                        modifier = Modifier.size(32.dp)
+                    ) {
+                        Icon(
+                            Icons.Default.KeyboardArrowUp,
+                            contentDescription = "Monter",
+                            tint = if (onMoveUp != null) Primary else OnSurfaceVariant.copy(alpha = 0.3f)
+                        )
+                    }
+                    IconButton(
+                        onClick = { onMoveDown?.invoke() },
+                        enabled = onMoveDown != null,
+                        modifier = Modifier.size(32.dp)
+                    ) {
+                        Icon(
+                            Icons.Default.KeyboardArrowDown,
+                            contentDescription = "Descendre",
+                            tint = if (onMoveDown != null) Primary else OnSurfaceVariant.copy(alpha = 0.3f)
+                        )
+                    }
+                }
+
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = exercise.name,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Text(
+                            text = "Séries:",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = OnSurfaceVariant
+                        )
+
+                        IconButton(
+                            onClick = { if (exercise.defaultSetsCount > 1) onUpdateSetsCount(exercise.defaultSetsCount - 1) },
+                            modifier = Modifier.size(32.dp),
+                            enabled = exercise.defaultSetsCount > 1
+                        ) {
+                            Icon(
+                                Icons.Default.Remove,
+                                contentDescription = "Moins",
+                                modifier = Modifier.size(16.dp),
+                                tint = if (exercise.defaultSetsCount > 1) OnSurfaceVariant else OnSurfaceVariant.copy(alpha = 0.3f)
+                            )
+                        }
+
+                        Text(
+                            text = "${exercise.defaultSetsCount}",
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.width(24.dp),
+                            textAlign = TextAlign.Center
+                        )
+
+                        IconButton(
+                            onClick = { onUpdateSetsCount(exercise.defaultSetsCount + 1) },
+                            modifier = Modifier.size(32.dp)
+                        ) {
+                            Icon(Icons.Default.Add, contentDescription = "Plus", modifier = Modifier.size(16.dp))
+                        }
+                    }
+
+                    // Temps de repos
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Icon(
+                            Icons.Default.Timer,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp),
+                            tint = OnSurfaceVariant
+                        )
+                        Text(
+                            text = "Repos:",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = OnSurfaceVariant
+                        )
+
+                        IconButton(
+                            onClick = { if (exercise.restTimeSeconds > 15) onUpdateRestTime(exercise.restTimeSeconds - 15) },
+                            modifier = Modifier.size(32.dp)
+                        ) {
+                            Icon(Icons.Default.Remove, contentDescription = "Moins", modifier = Modifier.size(16.dp))
+                        }
+
+                        Text(
+                            text = "${exercise.restTimeSeconds}s",
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+
+                        IconButton(
+                            onClick = { onUpdateRestTime(exercise.restTimeSeconds + 15) },
+                            modifier = Modifier.size(32.dp)
+                        ) {
+                            Icon(Icons.Default.Add, contentDescription = "Plus", modifier = Modifier.size(16.dp))
+                        }
+                    }
+                }
+
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    // Bouton superset
+                    IconButton(onClick = onToggleSuperset) {
+                        Icon(
+                            if (supersetGroupId != null) Icons.Default.LinkOff else Icons.Default.Link,
+                            contentDescription = if (supersetGroupId != null) "Retirer du superset" else "Ajouter au superset",
+                            tint = if (supersetGroupId != null) supersetColor ?: Primary else OnSurfaceVariant
+                        )
+                    }
+
+                    IconButton(onClick = onDelete) {
+                        Icon(
+                            Icons.Default.Delete,
+                            contentDescription = "Supprimer",
+                            tint = MaterialTheme.colorScheme.error
+                        )
+                    }
+                }
             }
         }
     }

@@ -27,5 +27,6 @@ data class TemplateExercise(
     val name: String,
     val orderIndex: Int = 0,
     val defaultSetsCount: Int = 3, // Nombre de séries par défaut
-    val restTimeSeconds: Int = 180 // Temps de repos entre séries en secondes
+    val restTimeSeconds: Int = 180, // Temps de repos entre séries en secondes
+    val supersetGroupId: Int? = null // ID du groupe superset (null = pas de superset)
 )

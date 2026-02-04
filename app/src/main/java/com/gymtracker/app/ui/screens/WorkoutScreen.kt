@@ -47,12 +47,22 @@ fun WorkoutScreen(
 
     var showAddExerciseDialog by remember { mutableStateOf(false) }
     var showFinishDialog by remember { mutableStateOf(false) }
+    var showCancelDialog by remember { mutableStateOf(false) }
     var showTemplateSelectionDialog by remember { mutableStateOf(false) }
     var showNotesDialog by remember { mutableStateOf(false) }
     var workoutNotes by remember { mutableStateOf("") }
 
     // État pour le timer de repos - stocke l'ID de l'exercice et les secondes
     var restTimerState by remember { mutableStateOf<Pair<Long, Int>?>(null) } // Pair(exerciseId, seconds)
+
+    // Couleurs pour les groupes de superset
+    val supersetColors = listOf(
+        androidx.compose.ui.graphics.Color(0xFFE91E63), // Pink
+        androidx.compose.ui.graphics.Color(0xFF2196F3), // Blue
+        androidx.compose.ui.graphics.Color(0xFFFF9800), // Orange
+        androidx.compose.ui.graphics.Color(0xFF9C27B0), // Purple
+        androidx.compose.ui.graphics.Color(0xFF00BCD4)  // Cyan
+    )
 
     Scaffold(
         topBar = {
@@ -225,6 +235,30 @@ fun WorkoutScreen(
             }
         } else {
             // Séance active - afficher les exercices
+            // Grouper les exercices par superset
+            val groupedExercises = remember(exercises) {
+                val result = mutableListOf<List<com.gymtracker.app.data.model.ExerciseWithSets>>()
+                val processed = mutableSetOf<Long>()
+
+                exercises.forEach { exercise ->
+                    if (exercise.exercise.id !in processed) {
+                        val supersetGroupId = exercise.exercise.supersetGroupId
+                        if (supersetGroupId != null) {
+                            // Trouver tous les exercices du même superset
+                            val supersetExercises = exercises.filter {
+                                it.exercise.supersetGroupId == supersetGroupId
+                            }
+                            result.add(supersetExercises)
+                            supersetExercises.forEach { processed.add(it.exercise.id) }
+                        } else {
+                            result.add(listOf(exercise))
+                            processed.add(exercise.exercise.id)
+                        }
+                    }
+                }
+                result
+            }
+
             LazyColumn(
                 modifier = Modifier
                     .fillMaxSize()
@@ -233,35 +267,111 @@ fun WorkoutScreen(
                 verticalArrangement = Arrangement.spacedBy(16.dp),
                 contentPadding = PaddingValues(vertical = 16.dp)
             ) {
-                // Liste des exercices avec timer intégré
-                exercises.forEach { exerciseWithSets ->
-                    item(key = exerciseWithSets.exercise.id) {
-                        Column {
-                            ExerciseCard(
-                                exerciseWithSets = exerciseWithSets,
-                                onAddSet = { viewModel.addSet(exerciseWithSets.exercise.id) },
-                                onDeleteExercise = { viewModel.deleteExercise(exerciseWithSets.exercise) },
-                                onSetUpdated = { viewModel.updateSet(it) },
-                                onSetCompleted = { setId, completed ->
-                                    viewModel.toggleSetCompletion(setId, completed)
-                                },
-                                onDeleteSet = { viewModel.deleteSet(it) },
-                                onIncrementReps = { viewModel.incrementReps(it) },
-                                onDecrementReps = { viewModel.decrementReps(it) },
-                                onIncrementWeight = { viewModel.incrementWeight(it) },
-                                onDecrementWeight = { viewModel.decrementWeight(it) },
-                                onRestTimerStart = { seconds ->
-                                    restTimerState = Pair(exerciseWithSets.exercise.id, seconds)
-                                }
-                            )
+                // Liste des exercices groupés par superset
+                groupedExercises.forEach { exerciseGroup ->
+                    item(key = exerciseGroup.map { it.exercise.id }.joinToString(",")) {
+                        if (exerciseGroup.size > 1) {
+                            // Superset - afficher côte à côte
+                            val supersetGroupId = exerciseGroup.first().exercise.supersetGroupId
+                            val supersetColor = supersetGroupId?.let { groupId ->
+                                supersetColors.getOrNull((groupId - 1) % supersetColors.size)
+                            }
 
-                            // Timer de repos affiché juste en dessous de l'exercice concerné
-                            if (restTimerState?.first == exerciseWithSets.exercise.id) {
-                                Spacer(modifier = Modifier.height(8.dp))
-                                RestTimer(
-                                    totalSeconds = restTimerState!!.second,
-                                    onDismiss = { restTimerState = null }
+                            Column {
+                                // Label superset
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(bottom = 8.dp),
+                                    horizontalArrangement = Arrangement.Center,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        Icons.Default.Link,
+                                        contentDescription = null,
+                                        tint = supersetColor ?: Primary,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text(
+                                        text = "SUPERSET",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = supersetColor ?: Primary,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+
+                                // Exercices côte à côte
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    exerciseGroup.forEach { exerciseWithSets ->
+                                        Box(modifier = Modifier.weight(1f)) {
+                                            ExerciseCard(
+                                                exerciseWithSets = exerciseWithSets,
+                                                onAddSet = { viewModel.addSet(exerciseWithSets.exercise.id) },
+                                                onDeleteExercise = { viewModel.deleteExercise(exerciseWithSets.exercise) },
+                                                onSetUpdated = { viewModel.updateSet(it) },
+                                                onSetCompleted = { setId, completed ->
+                                                    viewModel.toggleSetCompletion(setId, completed)
+                                                },
+                                                onDeleteSet = { viewModel.deleteSet(it) },
+                                                onIncrementWeight = { viewModel.incrementWeight(it) },
+                                                onDecrementWeight = { viewModel.decrementWeight(it) },
+                                                onRestTimerStart = { seconds ->
+                                                    restTimerState = Pair(exerciseWithSets.exercise.id, seconds)
+                                                },
+                                                supersetColor = supersetColor,
+                                                isCompactMode = true
+                                            )
+                                        }
+                                    }
+                                }
+
+                                // Timer de repos pour le superset (s'affiche pour n'importe quel exercice du groupe)
+                                val activeTimerExercise = exerciseGroup.find { it.exercise.id == restTimerState?.first }
+                                if (activeTimerExercise != null) {
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    RestTimer(
+                                        totalSeconds = restTimerState!!.second,
+                                        onDismiss = { restTimerState = null }
+                                    )
+                                }
+                            }
+                        } else {
+                            // Exercice simple
+                            val exerciseWithSets = exerciseGroup.first()
+                            val supersetColor = exerciseWithSets.exercise.supersetGroupId?.let { groupId ->
+                                supersetColors.getOrNull((groupId - 1) % supersetColors.size)
+                            }
+
+                            Column {
+                                ExerciseCard(
+                                    exerciseWithSets = exerciseWithSets,
+                                    onAddSet = { viewModel.addSet(exerciseWithSets.exercise.id) },
+                                    onDeleteExercise = { viewModel.deleteExercise(exerciseWithSets.exercise) },
+                                    onSetUpdated = { viewModel.updateSet(it) },
+                                    onSetCompleted = { setId, completed ->
+                                        viewModel.toggleSetCompletion(setId, completed)
+                                    },
+                                    onDeleteSet = { viewModel.deleteSet(it) },
+                                    onIncrementWeight = { viewModel.incrementWeight(it) },
+                                    onDecrementWeight = { viewModel.decrementWeight(it) },
+                                    onRestTimerStart = { seconds ->
+                                        restTimerState = Pair(exerciseWithSets.exercise.id, seconds)
+                                    },
+                                    supersetColor = supersetColor
                                 )
+
+                                // Timer de repos affiché juste en dessous de l'exercice concerné
+                                if (restTimerState?.first == exerciseWithSets.exercise.id) {
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    RestTimer(
+                                        totalSeconds = restTimerState!!.second,
+                                        onDismiss = { restTimerState = null }
+                                    )
+                                }
                             }
                         }
                     }
@@ -274,6 +384,30 @@ fun WorkoutScreen(
                     )
                 }
                 
+                // Bouton annuler la séance
+                item {
+                    Spacer(modifier = Modifier.height(24.dp))
+                    OutlinedButton(
+                        onClick = { showCancelDialog = true },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.outlinedButtonColors(
+                            contentColor = MaterialTheme.colorScheme.error
+                        ),
+                        border = androidx.compose.foundation.BorderStroke(
+                            1.dp,
+                            MaterialTheme.colorScheme.error.copy(alpha = 0.5f)
+                        )
+                    ) {
+                        Icon(
+                            Icons.Default.Cancel,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Annuler la séance")
+                    }
+                }
+
                 // Espace pour le FAB
                 item {
                     Spacer(modifier = Modifier.height(80.dp))
@@ -361,6 +495,41 @@ fun WorkoutScreen(
                     showNotesDialog = false
                 }) {
                     Text("Effacer")
+                }
+            }
+        )
+    }
+
+    // Dialog confirmer annulation de séance
+    if (showCancelDialog) {
+        AlertDialog(
+            onDismissRequest = { showCancelDialog = false },
+            title = {
+                Text(
+                    "Annuler la séance ?",
+                    color = MaterialTheme.colorScheme.error
+                )
+            },
+            text = {
+                Text("Cette action supprimera définitivement la séance en cours et toutes les données saisies. Cette action est irréversible.")
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        viewModel.cancelWorkout()
+                        showCancelDialog = false
+                        workoutNotes = ""
+                    },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.error
+                    )
+                ) {
+                    Text("Annuler la séance")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showCancelDialog = false }) {
+                    Text("Continuer")
                 }
             }
         )

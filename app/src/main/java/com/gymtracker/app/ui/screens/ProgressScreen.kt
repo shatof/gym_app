@@ -21,7 +21,9 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.gymtracker.app.data.model.ExerciseProgress
 import com.gymtracker.app.data.model.ProgressDataPoint
+import com.gymtracker.app.data.SettingsManager
 import com.gymtracker.app.ui.theme.*
+import com.gymtracker.app.ui.viewmodel.MuscleGroupStats
 import com.gymtracker.app.ui.viewmodel.ProgressViewModel
 import com.patrykandpatrick.vico.compose.axis.horizontal.rememberBottomAxis
 import com.patrykandpatrick.vico.compose.axis.vertical.rememberStartAxis
@@ -46,7 +48,8 @@ fun ProgressScreen(
     val exerciseNames by viewModel.exerciseNames.collectAsState()
     val selectedExercise by viewModel.selectedExercise.collectAsState()
     val progressData by viewModel.progressData.collectAsState(initial = null)
-    
+    val muscleGroupStats by viewModel.muscleGroupStats.collectAsState(initial = emptyList())
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -100,6 +103,10 @@ fun ProgressScreen(
                 }
             }
         } else {
+            // État pour la section rétractable des stats par groupe musculaire
+            var showMuscleGroupStats by remember { mutableStateOf(false) }
+            var selectedMuscleGroup by remember { mutableStateOf<SettingsManager.Companion.MuscleGroup?>(null) }
+
             LazyColumn(
                 modifier = Modifier
                     .fillMaxSize()
@@ -108,6 +115,74 @@ fun ProgressScreen(
                 verticalArrangement = Arrangement.spacedBy(16.dp),
                 contentPadding = PaddingValues(vertical = 16.dp)
             ) {
+                // Bouton pour afficher/masquer les statistiques par groupe musculaire
+                if (muscleGroupStats.isNotEmpty()) {
+                    item {
+                        Card(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { showMuscleGroupStats = !showMuscleGroupStats },
+                            colors = CardDefaults.cardColors(containerColor = Surface),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(16.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    Icon(
+                                        Icons.Default.FitnessCenter,
+                                        contentDescription = null,
+                                        tint = Primary
+                                    )
+                                    Column {
+                                        Text(
+                                            text = "Séries par groupe musculaire",
+                                            style = MaterialTheme.typography.titleMedium,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                        Text(
+                                            text = "${muscleGroupStats.sumOf { it.totalSets }} séries au total",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = OnSurfaceVariant
+                                        )
+                                    }
+                                }
+                                Icon(
+                                    if (showMuscleGroupStats) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                                    contentDescription = if (showMuscleGroupStats) "Masquer" else "Afficher",
+                                    tint = OnSurfaceVariant
+                                )
+                            }
+                        }
+                    }
+
+                    // Contenu rétractable
+                    if (showMuscleGroupStats) {
+                        item {
+                            MuscleGroupStatsCard(
+                                stats = muscleGroupStats,
+                                onMuscleGroupClick = { group ->
+                                    selectedMuscleGroup = if (selectedMuscleGroup == group) null else group
+                                },
+                                selectedGroup = selectedMuscleGroup,
+                                exerciseNames = exerciseNames,
+                                onExerciseClick = { exerciseName ->
+                                    viewModel.selectExercise(exerciseName)
+                                    showMuscleGroupStats = false
+                                    selectedMuscleGroup = null
+                                }
+                            )
+                        }
+                    }
+                }
+
                 // Sélecteur d'exercice
                 item {
                     Text(
@@ -479,3 +554,205 @@ fun DataPointCard(
         }
     }
 }
+
+/**
+ * Card affichant les statistiques par groupe musculaire avec détails cliquables
+ */
+@Composable
+fun MuscleGroupStatsCard(
+    stats: List<MuscleGroupStats>,
+    onMuscleGroupClick: (SettingsManager.Companion.MuscleGroup) -> Unit,
+    selectedGroup: SettingsManager.Companion.MuscleGroup?,
+    exerciseNames: List<String>,
+    onExerciseClick: (String) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val muscleGroupColors = mapOf(
+        SettingsManager.Companion.MuscleGroup.CHEST to Color(0xFFE91E63),
+        SettingsManager.Companion.MuscleGroup.BACK to Color(0xFF2196F3),
+        SettingsManager.Companion.MuscleGroup.SHOULDERS to Color(0xFFFF9800),
+        SettingsManager.Companion.MuscleGroup.BICEPS to Color(0xFF9C27B0),
+        SettingsManager.Companion.MuscleGroup.TRICEPS to Color(0xFF00BCD4),
+        SettingsManager.Companion.MuscleGroup.LEGS to Color(0xFF4CAF50),
+        SettingsManager.Companion.MuscleGroup.ABS to Color(0xFFFFEB3B),
+        SettingsManager.Companion.MuscleGroup.OTHER to Color(0xFF9E9E9E)
+    )
+
+    val maxSets = stats.maxOfOrNull { it.totalSets } ?: 1
+
+    Card(
+        modifier = modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = Surface),
+        shape = RoundedCornerShape(16.dp)
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            stats.forEach { stat ->
+                val color = muscleGroupColors[stat.muscleGroup] ?: Primary
+                val progress = stat.totalSets.toFloat() / maxSets.toFloat()
+                val isSelected = selectedGroup == stat.muscleGroup
+
+                // Exercices de ce groupe musculaire
+                val exercisesInGroup = exerciseNames.filter { name ->
+                    SettingsManager.getMuscleGroup(name) == stat.muscleGroup
+                }
+
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(if (isSelected) color.copy(alpha = 0.1f) else Color.Transparent)
+                        .clickable { onMuscleGroupClick(stat.muscleGroup) }
+                        .padding(8.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(12.dp)
+                                    .clip(RoundedCornerShape(3.dp))
+                                    .background(color)
+                            )
+                            Text(
+                                text = stat.muscleGroup.displayName,
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
+                            )
+                        }
+
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "${stat.totalSets} séries",
+                                style = MaterialTheme.typography.bodySmall,
+                                fontWeight = FontWeight.Bold,
+                                color = color
+                            )
+                            Text(
+                                text = "(~${"%.1f".format(stat.averageSetsPerWorkout)}/séance)",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = OnSurfaceVariant
+                            )
+                            Icon(
+                                if (isSelected) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                                contentDescription = null,
+                                modifier = Modifier.size(16.dp),
+                                tint = OnSurfaceVariant
+                            )
+                        }
+                    }
+
+                    // Barre de progression
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(6.dp)
+                            .clip(RoundedCornerShape(3.dp))
+                            .background(SurfaceVariant)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth(progress)
+                                .fillMaxHeight()
+                                .clip(RoundedCornerShape(3.dp))
+                                .background(color)
+                        )
+                    }
+
+                    // Détails des exercices si sélectionné
+                    if (isSelected && exercisesInGroup.isNotEmpty()) {
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        Text(
+                            text = "Exercices (${exercisesInGroup.size})",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = OnSurfaceVariant
+                        )
+
+                        Spacer(modifier = Modifier.height(4.dp))
+
+                        exercisesInGroup.forEach { exerciseName ->
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(4.dp))
+                                    .clickable { onExerciseClick(exerciseName) }
+                                    .padding(vertical = 6.dp, horizontal = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    Icon(
+                                        Icons.Default.FitnessCenter,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(14.dp),
+                                        tint = color
+                                    )
+                                    Text(
+                                        text = exerciseName,
+                                        style = MaterialTheme.typography.bodySmall
+                                    )
+                                }
+                                Icon(
+                                    Icons.Default.TrendingUp,
+                                    contentDescription = "Voir progression",
+                                    modifier = Modifier.size(14.dp),
+                                    tint = Primary
+                                )
+                            }
+                        }
+
+                        if (exercisesInGroup.isEmpty()) {
+                            Text(
+                                text = "Aucun exercice enregistré",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = OnSurfaceVariant,
+                                modifier = Modifier.padding(vertical = 4.dp)
+                            )
+                        }
+                    }
+                }
+            }
+
+            if (stats.isNotEmpty()) {
+                Divider(modifier = Modifier.padding(vertical = 4.dp))
+
+                // Total
+                val totalSets = stats.sumOf { it.totalSets }
+                val totalWorkouts = stats.maxOfOrNull { it.totalWorkouts } ?: 0
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text(
+                        text = "Total",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        text = "$totalSets séries sur $totalWorkouts séance(s)",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Primary
+                    )
+                }
+            }
+        }
+    }
+}
+

@@ -138,6 +138,130 @@ class SettingsManager(private val context: Context) {
             "Snatch",
             "Farmer walk"
         )
+
+        // Groupes musculaires
+        enum class MuscleGroup(val displayName: String) {
+            CHEST("Pectoraux"),
+            BACK("Dos"),
+            SHOULDERS("Épaules"),
+            BICEPS("Biceps"),
+            TRICEPS("Triceps"),
+            LEGS("Jambes"),
+            ABS("Abdominaux"),
+            OTHER("Autre")
+        }
+
+        // Mapping exercice -> groupe musculaire
+        val EXERCISE_TO_MUSCLE_GROUP: Map<String, MuscleGroup> = mapOf(
+            // Pectoraux
+            "Développé couché" to MuscleGroup.CHEST,
+            "Développé couché haltères" to MuscleGroup.CHEST,
+            "Développé incliné" to MuscleGroup.CHEST,
+            "Développé incliné haltères" to MuscleGroup.CHEST,
+            "Développé décliné" to MuscleGroup.CHEST,
+            "Écarté couché" to MuscleGroup.CHEST,
+            "Écarté incliné" to MuscleGroup.CHEST,
+            "Pec deck" to MuscleGroup.CHEST,
+            "Poulie vis-à-vis" to MuscleGroup.CHEST,
+            "Pompes" to MuscleGroup.CHEST,
+            "Dips pectoraux" to MuscleGroup.CHEST,
+
+            // Dos
+            "Tractions" to MuscleGroup.BACK,
+            "Tractions supination" to MuscleGroup.BACK,
+            "Tractions prise neutre" to MuscleGroup.BACK,
+            "Rowing barre" to MuscleGroup.BACK,
+            "Rowing haltère" to MuscleGroup.BACK,
+            "Rowing T-bar" to MuscleGroup.BACK,
+            "Tirage vertical" to MuscleGroup.BACK,
+            "Tirage horizontal" to MuscleGroup.BACK,
+            "Tirage poitrine" to MuscleGroup.BACK,
+            "Pullover" to MuscleGroup.BACK,
+            "Soulevé de terre" to MuscleGroup.BACK,
+            "Shrugs" to MuscleGroup.BACK,
+
+            // Épaules
+            "Développé épaules" to MuscleGroup.SHOULDERS,
+            "Développé militaire" to MuscleGroup.SHOULDERS,
+            "Développé Arnold" to MuscleGroup.SHOULDERS,
+            "Élévations latérales" to MuscleGroup.SHOULDERS,
+            "Élévations frontales" to MuscleGroup.SHOULDERS,
+            "Oiseau" to MuscleGroup.SHOULDERS,
+            "Face pull" to MuscleGroup.SHOULDERS,
+            "Rowing menton" to MuscleGroup.SHOULDERS,
+
+            // Biceps
+            "Curl biceps barre" to MuscleGroup.BICEPS,
+            "Curl biceps haltères" to MuscleGroup.BICEPS,
+            "Curl marteau" to MuscleGroup.BICEPS,
+            "Curl pupitre" to MuscleGroup.BICEPS,
+            "Curl incliné" to MuscleGroup.BICEPS,
+            "Curl concentration" to MuscleGroup.BICEPS,
+            "Curl poulie basse" to MuscleGroup.BICEPS,
+            "Curl biceps" to MuscleGroup.BICEPS,
+
+            // Triceps
+            "Extension triceps" to MuscleGroup.TRICEPS,
+            "Extension triceps poulie" to MuscleGroup.TRICEPS,
+            "Barre au front" to MuscleGroup.TRICEPS,
+            "Dips triceps" to MuscleGroup.TRICEPS,
+            "Kickback" to MuscleGroup.TRICEPS,
+            "Extension nuque" to MuscleGroup.TRICEPS,
+            "Pushdown corde" to MuscleGroup.TRICEPS,
+
+            // Jambes
+            "Squat" to MuscleGroup.LEGS,
+            "Squat barre devant" to MuscleGroup.LEGS,
+            "Hack squat" to MuscleGroup.LEGS,
+            "Leg press" to MuscleGroup.LEGS,
+            "Fentes" to MuscleGroup.LEGS,
+            "Fentes marchées" to MuscleGroup.LEGS,
+            "Leg extension" to MuscleGroup.LEGS,
+            "Leg curl" to MuscleGroup.LEGS,
+            "Leg curl assis" to MuscleGroup.LEGS,
+            "Soulevé de terre jambes tendues" to MuscleGroup.LEGS,
+            "Hip thrust" to MuscleGroup.LEGS,
+            "Mollets debout" to MuscleGroup.LEGS,
+            "Mollets assis" to MuscleGroup.LEGS,
+            "Presse mollets" to MuscleGroup.LEGS,
+
+            // Abdominaux
+            "Crunch" to MuscleGroup.ABS,
+            "Crunch inversé" to MuscleGroup.ABS,
+            "Relevé de jambes" to MuscleGroup.ABS,
+            "Planche" to MuscleGroup.ABS,
+            "Russian twist" to MuscleGroup.ABS,
+            "Ab wheel" to MuscleGroup.ABS,
+            "Gainage latéral" to MuscleGroup.ABS
+        )
+
+        /**
+         * Récupère le groupe musculaire d'un exercice
+         */
+        fun getMuscleGroup(exerciseName: String): MuscleGroup {
+            // Cherche d'abord une correspondance exacte
+            EXERCISE_TO_MUSCLE_GROUP[exerciseName]?.let { return it }
+
+            // Cherche une correspondance partielle (ignorer la casse)
+            val lowerName = exerciseName.lowercase()
+            for ((name, group) in EXERCISE_TO_MUSCLE_GROUP) {
+                if (lowerName.contains(name.lowercase()) || name.lowercase().contains(lowerName)) {
+                    return group
+                }
+            }
+
+            // Détection par mots-clés
+            return when {
+                lowerName.contains("pec") || lowerName.contains("développé couché") || lowerName.contains("dips pec") -> MuscleGroup.CHEST
+                lowerName.contains("traction") || lowerName.contains("rowing") || lowerName.contains("tirage") || lowerName.contains("dos") -> MuscleGroup.BACK
+                lowerName.contains("épaule") || lowerName.contains("latéral") || lowerName.contains("militaire") -> MuscleGroup.SHOULDERS
+                lowerName.contains("bicep") || lowerName.contains("curl") -> MuscleGroup.BICEPS
+                lowerName.contains("tricep") || lowerName.contains("extension") || lowerName.contains("pushdown") -> MuscleGroup.TRICEPS
+                lowerName.contains("squat") || lowerName.contains("leg") || lowerName.contains("jambe") || lowerName.contains("fente") || lowerName.contains("mollet") || lowerName.contains("hip thrust") -> MuscleGroup.LEGS
+                lowerName.contains("abdos") || lowerName.contains("crunch") || lowerName.contains("planche") || lowerName.contains("gainage") -> MuscleGroup.ABS
+                else -> MuscleGroup.OTHER
+            }
+        }
     }
 
     // Thème sombre

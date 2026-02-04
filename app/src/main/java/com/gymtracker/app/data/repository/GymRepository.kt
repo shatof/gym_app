@@ -31,6 +31,10 @@ class GymRepository(
     
     suspend fun deleteWorkout(workout: Workout) = workoutDao.delete(workout)
     
+    suspend fun deleteWorkoutById(workoutId: Long) {
+        workoutDao.deleteById(workoutId)
+    }
+
     suspend fun getWorkoutById(id: Long) = workoutDao.getWorkoutById(id)
     
     suspend fun getWorkoutWithExercises(id: Long) = workoutDao.getWorkoutWithExercises(id)
@@ -193,7 +197,8 @@ class GymRepository(
                     workoutId = workoutId,
                     name = templateExercise.name,
                     orderIndex = templateExercise.orderIndex,
-                    restTimeSeconds = templateExercise.restTimeSeconds
+                    restTimeSeconds = templateExercise.restTimeSeconds,
+                    supersetGroupId = templateExercise.supersetGroupId
                 )
             )
 

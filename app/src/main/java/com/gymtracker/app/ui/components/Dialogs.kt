@@ -284,7 +284,7 @@ fun WorkoutTimer(
 }
 
 /**
- * Timer de repos entre séries
+ * Timer de repos entre séries - utilise un service foreground pour la notification
  */
 @Composable
 fun RestTimer(
@@ -292,26 +292,58 @@ fun RestTimer(
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    var remainingSeconds by remember { mutableStateOf(totalSeconds) }
-    var isFinished by remember { mutableStateOf(false) }
+    val context = androidx.compose.ui.platform.LocalContext.current
 
-    LaunchedEffect(Unit) {
-        while (remainingSeconds > 0) {
-            kotlinx.coroutines.delay(1000)
-            remainingSeconds--
+    // Observer l'état du service
+    val remainingSecondsFromService by com.gymtracker.app.service.RestTimerService.remainingSeconds.collectAsState()
+    val isServiceRunning by com.gymtracker.app.service.RestTimerService.isRunning.collectAsState()
+    val timerFinished by com.gymtracker.app.service.RestTimerService.timerFinished.collectAsState()
+
+    // Utiliser la valeur du service ou la valeur initiale
+    val remainingSeconds = remainingSecondsFromService ?: totalSeconds
+
+    // Démarrer le service au lancement
+    LaunchedEffect(totalSeconds) {
+        com.gymtracker.app.service.RestTimerService.startTimer(context, totalSeconds)
+    }
+
+    // Quand le timer est terminé, fermer automatiquement
+    LaunchedEffect(timerFinished) {
+        if (timerFinished) {
+            kotlinx.coroutines.delay(100) // Petit délai pour s'assurer que l'état est propagé
+            com.gymtracker.app.service.RestTimerService.resetFinishedState()
+            onDismiss()
         }
-        isFinished = true
+    }
+
+    // Fermer si le service n'est plus en cours et le timer n'est pas null initialement
+    LaunchedEffect(isServiceRunning, remainingSecondsFromService) {
+        if (!isServiceRunning && remainingSecondsFromService == null) {
+            // Le timer s'est peut-être terminé entre-temps
+            kotlinx.coroutines.delay(200)
+            if (!com.gymtracker.app.service.RestTimerService.isRunning.value) {
+                onDismiss()
+            }
+        }
+    }
+
+    // Arrêter le service quand on ferme manuellement
+    DisposableEffect(Unit) {
+        onDispose {
+            // Ne pas arrêter si le timer s'est terminé naturellement
+            if (isServiceRunning) {
+                com.gymtracker.app.service.RestTimerService.stopTimer(context)
+            }
+        }
     }
 
     val minutes = remainingSeconds / 60
     val seconds = remainingSeconds % 60
-    val progress = remainingSeconds.toFloat() / totalSeconds.toFloat()
+    val progress = if (totalSeconds > 0) remainingSeconds.toFloat() / totalSeconds.toFloat() else 0f
 
     Card(
         modifier = modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = if (isFinished) Completed.copy(alpha = 0.2f) else Surface
-        ),
+        colors = CardDefaults.cardColors(containerColor = Surface),
         shape = RoundedCornerShape(16.dp)
     ) {
         Column(
@@ -327,20 +359,23 @@ fun RestTimer(
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(
-                        if (isFinished) Icons.Default.CheckCircle else Icons.Default.Timer,
+                        Icons.Default.Timer,
                         contentDescription = null,
-                        tint = if (isFinished) Completed else Primary,
+                        tint = Primary,
                         modifier = Modifier.size(24.dp)
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        text = if (isFinished) "Repos terminé !" else "Repos",
+                        text = "Repos",
                         style = MaterialTheme.typography.titleMedium,
-                        color = if (isFinished) Completed else OnSurface
+                        color = OnSurface
                     )
                 }
 
-                IconButton(onClick = onDismiss) {
+                IconButton(onClick = {
+                    com.gymtracker.app.service.RestTimerService.stopTimer(context)
+                    onDismiss()
+                }) {
                     Icon(
                         Icons.Default.Close,
                         contentDescription = "Fermer",
@@ -355,7 +390,7 @@ fun RestTimer(
             Text(
                 text = "%02d:%02d".format(minutes, seconds),
                 style = MaterialTheme.typography.displayMedium,
-                color = if (isFinished) Completed else Primary
+                color = Primary
             )
 
             Spacer(modifier = Modifier.height(12.dp))
@@ -367,19 +402,9 @@ fun RestTimer(
                     .fillMaxWidth()
                     .height(8.dp)
                     .clip(RoundedCornerShape(4.dp)),
-                color = if (isFinished) Completed else Primary,
+                color = Primary,
                 trackColor = SurfaceVariant
             )
-
-            if (isFinished) {
-                Spacer(modifier = Modifier.height(12.dp))
-                Button(
-                    onClick = onDismiss,
-                    colors = ButtonDefaults.buttonColors(containerColor = Completed)
-                ) {
-                    Text("C'est parti !")
-                }
-            }
         }
     }
 }

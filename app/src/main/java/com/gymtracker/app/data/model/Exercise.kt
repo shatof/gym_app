@@ -26,5 +26,6 @@ data class Exercise(
     val workoutId: Long,
     val name: String,
     val orderIndex: Int = 0,
-    val restTimeSeconds: Int = 180 // Temps de repos entre séries en secondes
+    val restTimeSeconds: Int = 180, // Temps de repos entre séries en secondes
+    val supersetGroupId: Int? = null // ID du groupe superset (null = pas de superset)
 )

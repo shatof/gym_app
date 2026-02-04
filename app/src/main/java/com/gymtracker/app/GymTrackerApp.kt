@@ -3,6 +3,7 @@ package com.gymtracker.app
 import android.app.Application
 import com.gymtracker.app.data.GymDatabase
 import com.gymtracker.app.data.repository.GymRepository
+import com.gymtracker.app.util.NotificationHelper
 
 class GymTrackerApp : Application() {
     
@@ -16,5 +17,10 @@ class GymTrackerApp : Application() {
             database.sessionTemplateDao(),
             database.templateExerciseDao()
         )
+    }
+
+    override fun onCreate() {
+        super.onCreate()
+        NotificationHelper.createNotificationChannels(this)
     }
 }

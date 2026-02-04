@@ -88,6 +88,16 @@ class TemplateViewModel(private val repository: GymRepository) : ViewModel() {
         }
     }
 
+    fun swapExerciseOrder(exercise1: TemplateExercise, exercise2: TemplateExercise) {
+        viewModelScope.launch {
+            // Échanger les orderIndex des deux exercices
+            val newExercise1 = exercise1.copy(orderIndex = exercise2.orderIndex)
+            val newExercise2 = exercise2.copy(orderIndex = exercise1.orderIndex)
+            repository.updateTemplateExercise(newExercise1)
+            repository.updateTemplateExercise(newExercise2)
+        }
+    }
+
     // Factory
     companion object {
         fun provideFactory(repository: GymRepository): ViewModelProvider.Factory {

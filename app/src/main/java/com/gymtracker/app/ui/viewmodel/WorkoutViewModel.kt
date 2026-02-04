@@ -86,6 +86,17 @@ class WorkoutViewModel(private val repository: GymRepository) : ViewModel() {
         }
     }
     
+    fun cancelWorkout() {
+        viewModelScope.launch {
+            _activeWorkoutId.value?.let { workoutId ->
+                repository.deleteWorkoutById(workoutId)
+                _activeWorkoutId.value = null
+                _workoutStartTime.value = null
+                _uiMessage.emit("Séance annulée")
+            }
+        }
+    }
+
     fun deleteWorkout(workout: Workout) {
         viewModelScope.launch {
             repository.deleteWorkout(workout)
@@ -177,13 +188,13 @@ class WorkoutViewModel(private val repository: GymRepository) : ViewModel() {
         }
     }
     
-    fun incrementWeight(set: ExerciseSet, increment: Float = 2.5f) {
+    fun incrementWeight(set: ExerciseSet, increment: Float = 1.25f) {
         viewModelScope.launch {
             repository.updateSetValues(set.id, set.reps, set.weight + increment, set.miorep)
         }
     }
     
-    fun decrementWeight(set: ExerciseSet, decrement: Float = 2.5f) {
+    fun decrementWeight(set: ExerciseSet, decrement: Float = 1.25f) {
         viewModelScope.launch {
             if (set.weight >= decrement) {
                 repository.updateSetValues(set.id, set.reps, set.weight - decrement, set.miorep)
