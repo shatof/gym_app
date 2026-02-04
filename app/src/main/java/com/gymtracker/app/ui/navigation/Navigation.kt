@@ -1,17 +1,14 @@
 package com.gymtracker.app.ui.navigation
 
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.viewmodel.compose.viewModel
-import androidx.navigation.NavDestination.Companion.hierarchy
-import androidx.navigation.NavGraph.Companion.findStartDestination
-import androidx.navigation.compose.NavHost
-import androidx.navigation.compose.composable
-import androidx.navigation.compose.currentBackStackEntryAsState
-import androidx.navigation.compose.rememberNavController
 import com.gymtracker.app.data.SettingsManager
 import com.gymtracker.app.data.repository.GymRepository
 import com.gymtracker.app.ui.screens.*
@@ -21,13 +18,14 @@ import com.gymtracker.app.ui.viewmodel.TemplateViewModel
 import com.gymtracker.app.ui.viewmodel.WorkoutViewModel
 import kotlinx.coroutines.launch
 
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 fun GymTrackerNavigation(
     repository: GymRepository
 ) {
     val context = LocalContext.current
-    val navController = rememberNavController()
     val settingsManager = remember { SettingsManager(context) }
+    val scope = rememberCoroutineScope()
 
     // Observer et appliquer les paramètres de thème
     val isDarkTheme by settingsManager.isDarkTheme.collectAsState(initial = true)
@@ -55,14 +53,20 @@ fun GymTrackerNavigation(
 
     // Collecter les messages UI
     val snackbarHostState = remember { SnackbarHostState() }
-    val scope = rememberCoroutineScope()
 
     LaunchedEffect(Unit) {
         workoutViewModel.uiMessage.collect { message ->
             snackbarHostState.showSnackbar(message)
         }
     }
-    
+
+    // État du pager pour le swipe
+    val screens = Screen.items
+    val pagerState = rememberPagerState(
+        initialPage = 0,
+        pageCount = { screens.size }
+    )
+
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         bottomBar = {
@@ -70,10 +74,7 @@ fun GymTrackerNavigation(
                 containerColor = Surface,
                 contentColor = OnSurface
             ) {
-                val navBackStackEntry by navController.currentBackStackEntryAsState()
-                val currentDestination = navBackStackEntry?.destination
-                
-                Screen.items.forEach { screen ->
+                screens.forEachIndexed { index, screen ->
                     NavigationBarItem(
                         icon = {
                             Icon(
@@ -82,14 +83,13 @@ fun GymTrackerNavigation(
                             )
                         },
                         label = { Text(screen.title) },
-                        selected = currentDestination?.hierarchy?.any { it.route == screen.route } == true,
+                        selected = pagerState.currentPage == index,
                         onClick = {
-                            navController.navigate(screen.route) {
-                                popUpTo(navController.graph.findStartDestination().id) {
-                                    saveState = true
-                                }
-                                launchSingleTop = true
-                                restoreState = true
+                            scope.launch {
+                                pagerState.animateScrollToPage(
+                                    page = index,
+                                    animationSpec = tween(durationMillis = 300)
+                                )
                             }
                         },
                         colors = NavigationBarItemDefaults.colors(
@@ -105,32 +105,20 @@ fun GymTrackerNavigation(
         },
         containerColor = Background
     ) { innerPadding ->
-        NavHost(
-            navController = navController,
-            startDestination = Screen.Workout.route,
-            modifier = Modifier.padding(innerPadding)
-        ) {
-            composable(Screen.Workout.route) {
-                WorkoutScreen(
+        HorizontalPager(
+            state = pagerState,
+            modifier = Modifier.padding(innerPadding),
+            key = { screens[it].route }
+        ) { page ->
+            when (screens[page]) {
+                Screen.Workout -> WorkoutScreen(
                     viewModel = workoutViewModel,
                     settingsManager = settingsManager
                 )
-            }
-            
-            composable(Screen.Templates.route) {
-                TemplateScreen(viewModel = templateViewModel)
-            }
-
-            composable(Screen.History.route) {
-                HistoryScreen(viewModel = workoutViewModel)
-            }
-            
-            composable(Screen.Progress.route) {
-                ProgressScreen(viewModel = progressViewModel)
-            }
-
-            composable(Screen.Settings.route) {
-                SettingsScreen(
+                Screen.Templates -> TemplateScreen(viewModel = templateViewModel)
+                Screen.History -> HistoryScreen(viewModel = workoutViewModel)
+                Screen.Progress -> ProgressScreen(viewModel = progressViewModel)
+                Screen.Settings -> SettingsScreen(
                     settingsManager = settingsManager,
                     repository = repository,
                     onShowSnackbar = { message ->

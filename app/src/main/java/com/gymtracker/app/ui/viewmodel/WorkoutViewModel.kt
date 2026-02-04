@@ -6,12 +6,18 @@ import androidx.lifecycle.viewModelScope
 import com.gymtracker.app.data.model.*
 import com.gymtracker.app.data.repository.GymRepository
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class WorkoutViewModel(private val repository: GymRepository) : ViewModel() {
     
+    // Debounce pour les mises à jour de sets
+    private var updateSetJob: Job? = null
+    private val pendingUpdates = mutableMapOf<Long, ExerciseSet>()
+
     // État de la séance active
     private val _activeWorkoutId = MutableStateFlow<Long?>(null)
     val activeWorkoutId: StateFlow<Long?> = _activeWorkoutId.asStateFlow()
@@ -150,8 +156,17 @@ class WorkoutViewModel(private val repository: GymRepository) : ViewModel() {
     }
     
     fun updateSet(set: ExerciseSet) {
-        viewModelScope.launch {
-            repository.updateSet(set)
+        // Stocker la mise à jour en attente
+        pendingUpdates[set.id] = set
+
+        // Annuler le job précédent et créer un nouveau avec debounce
+        updateSetJob?.cancel()
+        updateSetJob = viewModelScope.launch {
+            delay(300) // Attendre 300ms avant d'envoyer à la DB
+            pendingUpdates[set.id]?.let { pendingSet ->
+                repository.updateSet(pendingSet)
+                pendingUpdates.remove(set.id)
+            }
         }
     }
     

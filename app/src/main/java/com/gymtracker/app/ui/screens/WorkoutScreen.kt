@@ -235,28 +235,30 @@ fun WorkoutScreen(
             }
         } else {
             // Séance active - afficher les exercices
-            // Grouper les exercices par superset
-            val groupedExercises = remember(exercises) {
-                val result = mutableListOf<List<com.gymtracker.app.data.model.ExerciseWithSets>>()
-                val processed = mutableSetOf<Long>()
+            // Grouper les exercices par superset (optimisé avec derivedStateOf)
+            val groupedExercises by remember {
+                derivedStateOf {
+                    val result = mutableListOf<List<com.gymtracker.app.data.model.ExerciseWithSets>>()
+                    val processed = mutableSetOf<Long>()
 
-                exercises.forEach { exercise ->
-                    if (exercise.exercise.id !in processed) {
-                        val supersetGroupId = exercise.exercise.supersetGroupId
-                        if (supersetGroupId != null) {
-                            // Trouver tous les exercices du même superset
-                            val supersetExercises = exercises.filter {
-                                it.exercise.supersetGroupId == supersetGroupId
+                    exercises.forEach { exercise ->
+                        if (exercise.exercise.id !in processed) {
+                            val supersetGroupId = exercise.exercise.supersetGroupId
+                            if (supersetGroupId != null) {
+                                // Trouver tous les exercices du même superset
+                                val supersetExercises = exercises.filter {
+                                    it.exercise.supersetGroupId == supersetGroupId
+                                }
+                                result.add(supersetExercises)
+                                supersetExercises.forEach { processed.add(it.exercise.id) }
+                            } else {
+                                result.add(listOf(exercise))
+                                processed.add(exercise.exercise.id)
                             }
-                            result.add(supersetExercises)
-                            supersetExercises.forEach { processed.add(it.exercise.id) }
-                        } else {
-                            result.add(listOf(exercise))
-                            processed.add(exercise.exercise.id)
                         }
                     }
+                    result
                 }
-                result
             }
 
             LazyColumn(
@@ -322,6 +324,10 @@ fun WorkoutScreen(
                                                 onRestTimerStart = { seconds ->
                                                     restTimerState = Pair(exerciseWithSets.exercise.id, seconds)
                                                 },
+                                                onRestTimerStop = {
+                                                    restTimerState = null
+                                                    com.gymtracker.app.service.RestTimerService.stopTimer(context)
+                                                },
                                                 supersetColor = supersetColor,
                                                 isCompactMode = true
                                             )
@@ -360,6 +366,10 @@ fun WorkoutScreen(
                                     onDecrementWeight = { viewModel.decrementWeight(it) },
                                     onRestTimerStart = { seconds ->
                                         restTimerState = Pair(exerciseWithSets.exercise.id, seconds)
+                                    },
+                                    onRestTimerStop = {
+                                        restTimerState = null
+                                        com.gymtracker.app.service.RestTimerService.stopTimer(context)
                                     },
                                     supersetColor = supersetColor
                                 )

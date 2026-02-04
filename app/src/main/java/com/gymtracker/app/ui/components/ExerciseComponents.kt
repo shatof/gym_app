@@ -40,6 +40,7 @@ fun ExerciseCard(
     onIncrementWeight: (ExerciseSet) -> Unit,
     onDecrementWeight: (ExerciseSet) -> Unit,
     onRestTimerStart: (Int) -> Unit = {}, // Callback pour démarrer le timer de repos
+    onRestTimerStop: () -> Unit = {}, // Callback pour arrêter le timer de repos
     supersetColor: Color? = null, // Couleur du superset si applicable
     isCompactMode: Boolean = false, // Mode compact pour affichage superset côte à côte
     modifier: Modifier = Modifier
@@ -163,6 +164,8 @@ fun ExerciseCard(
                                 onSetCompleted(set.id, completed)
                                 if (completed) {
                                     onRestTimerStart(exerciseWithSets.exercise.restTimeSeconds)
+                                } else {
+                                    onRestTimerStop()
                                 }
                             },
                             onDelete = { onDeleteSet(set) }
@@ -176,6 +179,9 @@ fun ExerciseCard(
                                 // Démarrer le timer de repos si le set vient d'être complété
                                 if (completed) {
                                     onRestTimerStart(exerciseWithSets.exercise.restTimeSeconds)
+                                } else {
+                                    // Arrêter le timer si on décoche
+                                    onRestTimerStop()
                                 }
                             },
                             onDelete = { onDeleteSet(set) },
@@ -340,11 +346,17 @@ fun CompactSetRow(
     var showDeleteConfirm by remember { mutableStateOf(false) }
     val backgroundColor = if (set.isCompleted) Completed.copy(alpha = 0.2f) else SurfaceVariant
 
-    var weightText by remember(set.weight) {
-        mutableStateOf(if (set.weight == 0f) "" else "%.1f".format(set.weight).replace(",", "."))
+    var weightText by remember { mutableStateOf(if (set.weight == 0f) "" else "%.1f".format(set.weight).replace(",", ".")) }
+    var repsText by remember { mutableStateOf(if (set.reps == 0) "" else set.reps.toString()) }
+
+    // Synchroniser avec les valeurs externes
+    val expectedWeightText = if (set.weight == 0f) "" else "%.1f".format(set.weight).replace(",", ".")
+    if (weightText != expectedWeightText && (weightText.toFloatOrNull() ?: -1f) != set.weight) {
+        weightText = expectedWeightText
     }
-    var repsText by remember(set.reps) {
-        mutableStateOf(if (set.reps == 0) "" else set.reps.toString())
+    val expectedRepsText = if (set.reps == 0) "" else set.reps.toString()
+    if (repsText != expectedRepsText && (repsText.toIntOrNull() ?: -1) != set.reps) {
+        repsText = expectedRepsText
     }
 
     Row(
@@ -496,18 +508,17 @@ fun WeightInputWithButtons(
         }
     }
 
-    var text by remember(value) { mutableStateOf(formatWeight(value)) }
+    // Utiliser key pour forcer la recomposition uniquement quand la valeur change significativement
+    var text by remember { mutableStateOf(formatWeight(value)) }
 
-    // Mettre à jour le texte quand la valeur externe change
-    LaunchedEffect(value) {
-        val newText = formatWeight(value)
-        if (text != newText && (text.replace(",", ".").toFloatOrNull() ?: 0f) != value) {
-            text = newText
-        }
+    // Synchroniser le texte avec la valeur externe seulement si différent
+    val formattedValue = formatWeight(value)
+    if (text != formattedValue && (text.replace(",", ".").toFloatOrNull() ?: -1f) != value) {
+        text = formattedValue
     }
 
     Row(
-        modifier = modifier.padding(horizontal = 0.dp),
+        modifier = modifier,
         horizontalArrangement = Arrangement.Center,
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -601,14 +612,12 @@ fun RepsInput(
     onValueChange: (Int) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    var text by remember(value) { mutableStateOf(if (value == 0) "" else value.toString()) }
+    var text by remember { mutableStateOf(if (value == 0) "" else value.toString()) }
 
-    // Mettre à jour le texte quand la valeur externe change
-    LaunchedEffect(value) {
-        val newText = if (value == 0) "" else value.toString()
-        if (text != newText && (text.toIntOrNull() ?: 0) != value) {
-            text = newText
-        }
+    // Synchroniser le texte avec la valeur externe seulement si différent
+    val expectedText = if (value == 0) "" else value.toString()
+    if (text != expectedText && (text.toIntOrNull() ?: -1) != value) {
+        text = expectedText
     }
 
     BasicTextField(
@@ -655,8 +664,14 @@ fun MiorepInput(
     onValueChange: (Int?) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    var text by remember(value) { mutableStateOf(value?.toString() ?: "") }
-    
+    var text by remember { mutableStateOf(value?.toString() ?: "") }
+
+    // Synchroniser le texte avec la valeur externe seulement si différent
+    val expectedText = value?.toString() ?: ""
+    if (text != expectedText && text.toIntOrNull() != value) {
+        text = expectedText
+    }
+
     BasicTextField(
         value = text,
         onValueChange = { newText ->
