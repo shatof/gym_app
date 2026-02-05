@@ -15,6 +15,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.font.FontWeight
@@ -496,12 +497,21 @@ fun WeightInputWithButtons(
     modifier: Modifier = Modifier
 ) {
     // Formater avec 1 décimale pour l'affichage (16.25 → 16.3)
+    // Pour les nombres >= 100, ne pas afficher de décimale si c'est .0
     fun formatWeight(weight: Float): String {
         return if (weight == 0f) {
             ""
         } else if (weight == weight.toInt().toFloat()) {
             // Nombre entier
             weight.toInt().toString()
+        } else if (weight >= 100f) {
+            // Pour >= 100kg, arrondir à l'entier le plus proche si la décimale est proche de .0 ou .5
+            val rounded = (weight * 2).toInt() / 2f // Arrondir au 0.5 le plus proche
+            if (rounded == rounded.toInt().toFloat()) {
+                rounded.toInt().toString()
+            } else {
+                String.format("%.1f", rounded).replace(",", ".")
+            }
         } else {
             // Nombre décimal - arrondir à 1 décimale pour l'affichage
             String.format("%.1f", weight).replace(",", ".")
@@ -558,12 +568,12 @@ fun WeightInputWithButtons(
                 onValueChange(floatValue)
             },
             modifier = Modifier
-                .width(55.dp)
+                .width(60.dp)
                 .height(32.dp)
                 .clip(RoundedCornerShape(6.dp))
                 .background(Background)
-                .padding(horizontal = 4.dp, vertical = 6.dp),
-            textStyle = MaterialTheme.typography.bodyMedium.copy(
+                .padding(horizontal = 2.dp, vertical = 6.dp),
+            textStyle = MaterialTheme.typography.bodySmall.copy(
                 color = OnSurface,
                 textAlign = TextAlign.Center,
                 fontWeight = FontWeight.Medium
@@ -612,12 +622,17 @@ fun RepsInput(
     onValueChange: (Int) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    var text by remember { mutableStateOf(if (value == 0) "" else value.toString()) }
+    var text by remember(value) { mutableStateOf(if (value == 0) "" else value.toString()) }
+    var hasFocus by remember { mutableStateOf(false) }
 
-    // Synchroniser le texte avec la valeur externe seulement si différent
-    val expectedText = if (value == 0) "" else value.toString()
-    if (text != expectedText && (text.toIntOrNull() ?: -1) != value) {
-        text = expectedText
+    // Synchroniser le texte avec la valeur externe seulement si le champ n'a pas le focus
+    LaunchedEffect(value, hasFocus) {
+        if (!hasFocus) {
+            val expectedText = if (value == 0) "" else value.toString()
+            if (text != expectedText) {
+                text = expectedText
+            }
+        }
     }
 
     BasicTextField(
@@ -631,7 +646,10 @@ fun RepsInput(
             .height(32.dp)
             .clip(RoundedCornerShape(6.dp))
             .background(Background)
-            .padding(horizontal = 8.dp, vertical = 6.dp),
+            .padding(horizontal = 8.dp, vertical = 6.dp)
+            .onFocusChanged { focusState ->
+                hasFocus = focusState.isFocused
+            },
         textStyle = MaterialTheme.typography.bodyMedium.copy(
             color = OnSurface,
             textAlign = TextAlign.Center,
@@ -664,12 +682,17 @@ fun MiorepInput(
     onValueChange: (Int?) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    var text by remember { mutableStateOf(value?.toString() ?: "") }
+    var text by remember(value) { mutableStateOf(value?.toString() ?: "") }
+    var hasFocus by remember { mutableStateOf(false) }
 
-    // Synchroniser le texte avec la valeur externe seulement si différent
-    val expectedText = value?.toString() ?: ""
-    if (text != expectedText && text.toIntOrNull() != value) {
-        text = expectedText
+    // Synchroniser le texte avec la valeur externe seulement si le champ n'a pas le focus
+    LaunchedEffect(value, hasFocus) {
+        if (!hasFocus) {
+            val expectedText = value?.toString() ?: ""
+            if (text != expectedText) {
+                text = expectedText
+            }
+        }
     }
 
     BasicTextField(
@@ -682,7 +705,10 @@ fun MiorepInput(
             .height(32.dp)
             .clip(RoundedCornerShape(4.dp))
             .background(Background)
-            .padding(horizontal = 8.dp, vertical = 6.dp),
+            .padding(horizontal = 8.dp, vertical = 6.dp)
+            .onFocusChanged { focusState ->
+                hasFocus = focusState.isFocused
+            },
         textStyle = MaterialTheme.typography.bodyMedium.copy(
             color = OnSurface,
             textAlign = TextAlign.Center
