@@ -6,11 +6,13 @@ import androidx.room.Room
 import androidx.room.RoomDatabase
 import com.gymtracker.app.data.dao.ExerciseDao
 import com.gymtracker.app.data.dao.ExerciseSetDao
+import com.gymtracker.app.data.dao.MeasurementDao
 import com.gymtracker.app.data.dao.SessionTemplateDao
 import com.gymtracker.app.data.dao.TemplateExerciseDao
 import com.gymtracker.app.data.dao.WorkoutDao
 import com.gymtracker.app.data.model.Exercise
 import com.gymtracker.app.data.model.ExerciseSet
+import com.gymtracker.app.data.model.Measurement
 import com.gymtracker.app.data.model.SessionTemplate
 import com.gymtracker.app.data.model.TemplateExercise
 import com.gymtracker.app.data.model.Workout
@@ -21,9 +23,10 @@ import com.gymtracker.app.data.model.Workout
         Exercise::class,
         ExerciseSet::class,
         SessionTemplate::class,
-        TemplateExercise::class
+        TemplateExercise::class,
+        Measurement::class
     ],
-    version = 4,
+    version = 5,
     exportSchema = true
 )
 abstract class GymDatabase : RoomDatabase() {
@@ -33,6 +36,7 @@ abstract class GymDatabase : RoomDatabase() {
     abstract fun exerciseSetDao(): ExerciseSetDao
     abstract fun sessionTemplateDao(): SessionTemplateDao
     abstract fun templateExerciseDao(): TemplateExerciseDao
+    abstract fun measurementDao(): MeasurementDao
 
     companion object {
         @Volatile

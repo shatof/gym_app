@@ -9,14 +9,18 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.gymtracker.app.GymTrackerApp
 import com.gymtracker.app.data.SettingsManager
 import com.gymtracker.app.data.repository.GymRepository
 import com.gymtracker.app.ui.screens.*
 import com.gymtracker.app.ui.theme.*
 import com.gymtracker.app.ui.viewmodel.ProgressViewModel
+import com.gymtracker.app.ui.viewmodel.ProfileViewModel
 import com.gymtracker.app.ui.viewmodel.TemplateViewModel
 import com.gymtracker.app.ui.viewmodel.WorkoutViewModel
 import kotlinx.coroutines.launch
+import androidx.compose.material3.SnackbarDuration
+import androidx.compose.material3.SnackbarResult
 
 @OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
@@ -50,6 +54,9 @@ fun GymTrackerNavigation(
     val templateViewModel: TemplateViewModel = viewModel(
         factory = TemplateViewModel.provideFactory(repository)
     )
+    val profileViewModel: ProfileViewModel = viewModel(
+        factory = ProfileViewModel.provideFactory(repository)
+    )
 
     // Collecter les messages UI
     val snackbarHostState = remember { SnackbarHostState() }
@@ -60,12 +67,47 @@ fun GymTrackerNavigation(
         }
     }
 
+    // Undo intelligent — snackbar avec bouton "Annuler"
+    LaunchedEffect(Unit) {
+        workoutViewModel.undoEvent.collect { message ->
+            val result = snackbarHostState.showSnackbar(
+                message = message,
+                actionLabel = "Annuler",
+                duration = SnackbarDuration.Long
+            )
+            if (result == SnackbarResult.ActionPerformed) {
+                workoutViewModel.undoLast()
+            }
+        }
+    }
+
     // État du pager pour le swipe
     val screens = Screen.items
     val pagerState = rememberPagerState(
         initialPage = 0,
         pageCount = { screens.size }
     )
+
+    // Observer les raccourcis Android (long-press icône)
+    val app = context.applicationContext as GymTrackerApp
+    LaunchedEffect(Unit) {
+        app.pendingShortcutAction.collect { action ->
+            if (action == null) return@collect
+            app.pendingShortcutAction.value = null
+            when (action.first) {
+                GymTrackerApp.ACTION_FREE_WORKOUT -> {
+                    workoutViewModel.startWorkout()
+                    scope.launch { pagerState.scrollToPage(0) }
+                }
+                GymTrackerApp.ACTION_START_TEMPLATE -> {
+                    action.second?.let { templateId ->
+                        workoutViewModel.startWorkoutFromTemplate(templateId)
+                        scope.launch { pagerState.scrollToPage(0) }
+                    }
+                }
+            }
+        }
+    }
 
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
@@ -117,7 +159,10 @@ fun GymTrackerNavigation(
                 )
                 Screen.Templates -> TemplateScreen(viewModel = templateViewModel)
                 Screen.History -> HistoryScreen(viewModel = workoutViewModel)
-                Screen.Progress -> ProgressScreen(viewModel = progressViewModel)
+                Screen.Progress -> ProgressScreen(
+                    viewModel = progressViewModel,
+                    profileViewModel = profileViewModel
+                )
                 Screen.Settings -> SettingsScreen(
                     settingsManager = settingsManager,
                     repository = repository,

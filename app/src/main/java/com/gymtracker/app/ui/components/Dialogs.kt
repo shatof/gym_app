@@ -24,6 +24,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import com.gymtracker.app.ui.theme.*
+import com.gymtracker.app.util.matchesSearch
 
 /**
  * Dialog pour ajouter un nouvel exercice
@@ -49,15 +50,15 @@ fun AddExerciseDialog(
 
             // D'abord les exercices par défaut qui matchent
             val fromDefault = commonExercises.filter {
-                it.contains(exerciseName, ignoreCase = true) && it != exerciseName
+                matchesSearch(it, exerciseName) && it != exerciseName
             }
             // Ensuite les exercices existants
             val fromExisting = existingExerciseNames.filter {
-                it.contains(exerciseName, ignoreCase = true) && it != exerciseName && !fromDefault.contains(it)
+                matchesSearch(it, exerciseName) && it != exerciseName && !fromDefault.contains(it)
             }
             // Enfin tous les autres
             val fromAll = allExercises.filter {
-                it.contains(exerciseName, ignoreCase = true) && it != exerciseName && !fromDefault.contains(it) && !fromExisting.contains(it)
+                matchesSearch(it, exerciseName) && it != exerciseName && !fromDefault.contains(it) && !fromExisting.contains(it)
             }
 
             (fromDefault + fromExisting + fromAll).take(3)

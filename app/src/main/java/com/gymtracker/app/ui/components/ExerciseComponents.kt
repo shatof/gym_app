@@ -25,6 +25,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.gymtracker.app.data.model.ExerciseSet
 import com.gymtracker.app.data.model.ExerciseWithSets
+import com.gymtracker.app.data.model.LoadSuggestion
 import com.gymtracker.app.ui.theme.*
 
 /**
@@ -44,6 +45,7 @@ fun ExerciseCard(
     onRestTimerStop: () -> Unit = {}, // Callback pour arrêter le timer de repos
     supersetColor: Color? = null, // Couleur du superset si applicable
     isCompactMode: Boolean = false, // Mode compact pour affichage superset côte à côte
+    loadSuggestion: LoadSuggestion? = null, // Suggestion de charge basée sur la dernière séance
     modifier: Modifier = Modifier
 ) {
     var showDeleteDialog by remember { mutableStateOf(false) }
@@ -112,6 +114,25 @@ fun ExerciseCard(
                     }
                 }
 
+                // Suggestion de charge (mode normal uniquement)
+                if (loadSuggestion != null && !isCompactMode) {
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            if (loadSuggestion.isProgression) Icons.Default.TrendingUp else Icons.Default.Remove,
+                            contentDescription = null,
+                            modifier = Modifier.size(12.dp),
+                            tint = if (loadSuggestion.isProgression) Completed else OnSurfaceVariant
+                        )
+                        androidx.compose.foundation.layout.Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = "Suggestion : ${formatCompactWeight(loadSuggestion.suggestedWeight)} kg • ${loadSuggestion.reason}",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = if (loadSuggestion.isProgression) Completed else OnSurfaceVariant
+                        )
+                    }
+                }
+
                 Spacer(modifier = Modifier.height(if (isCompactMode) 8.dp else 12.dp))
 
                 // En-tête des colonnes (simplifié en mode compact)
@@ -169,7 +190,9 @@ fun ExerciseCard(
                                     onRestTimerStop()
                                 }
                             },
-                            onDelete = { onDeleteSet(set) }
+                            onDelete = { onDeleteSet(set) },
+                            onIncrementWeight = { onIncrementWeight(set) },
+                            onDecrementWeight = { onDecrementWeight(set) }
                         )
                     } else {
                         SetRow(
@@ -199,8 +222,10 @@ fun ExerciseCard(
                     modifier = Modifier.align(Alignment.CenterHorizontally)
                 ) {
                     Icon(Icons.Default.Add, contentDescription = null, modifier = if (isCompactMode) Modifier.size(16.dp) else Modifier)
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text(if (isCompactMode) "+" else "Ajouter une série", style = if (isCompactMode) MaterialTheme.typography.bodySmall else LocalTextStyle.current)
+                    if (!isCompactMode) {
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("Ajouter une série")
+                    }
                 }
             }
         }
@@ -334,6 +359,17 @@ fun SetRow(
 }
 
 /**
+ * Formate le poids pour l'affichage compact
+ */
+private fun formatCompactWeight(weight: Float): String {
+    return if (weight == weight.toInt().toFloat()) {
+        weight.toInt().toString()
+    } else {
+        String.format("%.1f", weight).replace(",", ".")
+    }
+}
+
+/**
  * Ligne compacte pour les séries dans les supersets
  */
 @Composable
@@ -342,22 +378,33 @@ fun CompactSetRow(
     onSetUpdated: (ExerciseSet) -> Unit,
     onSetCompleted: (Boolean) -> Unit,
     onDelete: () -> Unit,
+    onIncrementWeight: () -> Unit = {},
+    onDecrementWeight: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     var showDeleteConfirm by remember { mutableStateOf(false) }
     val backgroundColor = if (set.isCompleted) Completed.copy(alpha = 0.2f) else SurfaceVariant
 
-    var weightText by remember { mutableStateOf(if (set.weight == 0f) "" else "%.1f".format(set.weight).replace(",", ".")) }
-    var repsText by remember { mutableStateOf(if (set.reps == 0) "" else set.reps.toString()) }
+    // Utiliser key pour réinitialiser l'état quand l'id change
+    var weightText by remember(set.id) { mutableStateOf(if (set.weight == 0f) "" else formatCompactWeight(set.weight)) }
+    var repsText by remember(set.id) { mutableStateOf(if (set.reps == 0) "" else set.reps.toString()) }
 
-    // Synchroniser avec les valeurs externes
-    val expectedWeightText = if (set.weight == 0f) "" else "%.1f".format(set.weight).replace(",", ".")
-    if (weightText != expectedWeightText && (weightText.toFloatOrNull() ?: -1f) != set.weight) {
-        weightText = expectedWeightText
+    // Synchroniser avec les valeurs externes quand elles changent depuis l'extérieur
+    val externalWeight = set.weight
+    val externalReps = set.reps
+
+    LaunchedEffect(externalWeight) {
+        val currentValue = weightText.replace(",", ".").toFloatOrNull() ?: -1f
+        if (currentValue != externalWeight) {
+            weightText = if (externalWeight == 0f) "" else formatCompactWeight(externalWeight)
+        }
     }
-    val expectedRepsText = if (set.reps == 0) "" else set.reps.toString()
-    if (repsText != expectedRepsText && (repsText.toIntOrNull() ?: -1) != set.reps) {
-        repsText = expectedRepsText
+
+    LaunchedEffect(externalReps) {
+        val currentValue = repsText.toIntOrNull() ?: 0
+        if (currentValue != externalReps) {
+            repsText = if (externalReps == 0) "" else externalReps.toString()
+        }
     }
 
     Row(
@@ -386,11 +433,13 @@ fun CompactSetRow(
             )
         }
 
-        // Poids
+        // Poids - saisie manuelle simple
         BasicTextField(
             value = weightText,
             onValueChange = { newText ->
-                val filtered = newText.filter { it.isDigit() || it == '.' || it == ',' }.replace(",", ".").take(5)
+                val filtered = newText.filter { it.isDigit() || it == '.' || it == ',' }
+                    .replace(",", ".")
+                    .take(6)
                 weightText = filtered
                 onSetUpdated(set.copy(weight = filtered.toFloatOrNull() ?: 0f))
             },
@@ -417,7 +466,7 @@ fun CompactSetRow(
             }
         )
 
-        // Reps
+        // Reps - saisie manuelle simple
         BasicTextField(
             value = repsText,
             onValueChange = { newText ->
@@ -607,6 +656,117 @@ fun WeightInputWithButtons(
                 Icons.Default.Add,
                 contentDescription = "Augmenter",
                 modifier = Modifier.size(16.dp),
+                tint = Primary
+            )
+        }
+    }
+}
+
+/**
+ * Input compact pour le poids dans les supersets avec boutons +/-
+ */
+@Composable
+fun CompactWeightInput(
+    value: Float,
+    onValueChange: (Float) -> Unit,
+    onIncrement: () -> Unit,
+    onDecrement: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    fun formatWeight(weight: Float): String {
+        return if (weight == 0f) {
+            ""
+        } else if (weight == weight.toInt().toFloat()) {
+            weight.toInt().toString()
+        } else if (weight >= 100f) {
+            val rounded = (weight * 2).toInt() / 2f
+            if (rounded == rounded.toInt().toFloat()) {
+                rounded.toInt().toString()
+            } else {
+                String.format("%.1f", rounded).replace(",", ".")
+            }
+        } else {
+            String.format("%.1f", weight).replace(",", ".")
+        }
+    }
+
+    var text by remember(value) { mutableStateOf(formatWeight(value)) }
+
+    LaunchedEffect(value) {
+        val formatted = formatWeight(value)
+        val currentValue = text.replace(",", ".").toFloatOrNull() ?: -1f
+        if (currentValue != value) {
+            text = formatted
+        }
+    }
+
+    Row(
+        modifier = modifier,
+        horizontalArrangement = Arrangement.Center,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        // Bouton moins
+        IconButton(
+            onClick = onDecrement,
+            modifier = Modifier.size(20.dp)
+        ) {
+            Icon(
+                Icons.Default.Remove,
+                contentDescription = "Diminuer",
+                modifier = Modifier.size(12.dp),
+                tint = Primary
+            )
+        }
+
+        BasicTextField(
+            value = text,
+            onValueChange = { newText ->
+                val filtered = newText.filter { it.isDigit() || it == '.' || it == ',' }
+                    .replace(",", ".")
+                val parts = filtered.split(".")
+                val sanitized = if (parts.size > 2) {
+                    parts[0] + "." + parts.drop(1).joinToString("")
+                } else if (parts.size == 2 && parts[1].length > 2) {
+                    parts[0] + "." + parts[1].take(2)
+                } else {
+                    filtered
+                }
+                text = sanitized.take(6)
+                onValueChange(sanitized.toFloatOrNull() ?: 0f)
+            },
+            modifier = Modifier
+                .width(40.dp)
+                .height(24.dp)
+                .clip(RoundedCornerShape(4.dp))
+                .background(Background)
+                .padding(horizontal = 2.dp, vertical = 2.dp),
+            textStyle = MaterialTheme.typography.labelSmall.copy(
+                color = OnSurface,
+                textAlign = TextAlign.Center,
+                fontWeight = FontWeight.Medium
+            ),
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+            singleLine = true,
+            cursorBrush = SolidColor(Primary),
+            decorationBox = { innerTextField ->
+                Box(contentAlignment = Alignment.Center) {
+                    if (text.isEmpty()) {
+                        Text("kg", style = MaterialTheme.typography.labelSmall, color = OnSurfaceVariant)
+                    }
+                    innerTextField()
+                }
+            }
+        )
+
+        // Bouton plus
+        IconButton(
+            onClick = onIncrement,
+            modifier = Modifier.size(20.dp)
+        ) {
+            Icon(
+                Icons.Default.Add,
+                contentDescription = "Augmenter",
+                modifier = Modifier.size(12.dp),
                 tint = Primary
             )
         }

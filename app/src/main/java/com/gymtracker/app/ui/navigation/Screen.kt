@@ -32,7 +32,7 @@ sealed class Screen(
         title = "Stats",
         icon = Icons.Default.TrendingUp
     )
-    
+
     object Settings : Screen(
         route = "settings",
         title = "Réglages",
@@ -40,6 +40,7 @@ sealed class Screen(
     )
 
     companion object {
+        // 5 onglets principaux - le profil est accessible depuis Stats
         val items = listOf(Workout, Templates, History, Progress, Settings)
     }
 }

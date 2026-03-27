@@ -22,6 +22,7 @@ import com.gymtracker.app.data.model.Workout
 import com.gymtracker.app.data.model.WorkoutWithExercises
 import com.gymtracker.app.ui.theme.*
 import com.gymtracker.app.ui.viewmodel.WorkoutViewModel
+import com.gymtracker.app.util.matchesSearch
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -37,93 +38,144 @@ fun HistoryScreen(
 ) {
     val workouts by viewModel.allWorkouts.collectAsState(initial = emptyList())
     var workoutToDelete by remember { mutableStateOf<Workout?>(null) }
+    var workoutToEdit by remember { mutableStateOf<WorkoutWithExercises?>(null) }
     var viewMode by remember { mutableStateOf(HistoryViewMode.LIST) }
     var selectedFilter by remember { mutableStateOf<String?>(null) }
     var showFilterMenu by remember { mutableStateOf(false) }
+    var searchQuery by remember { mutableStateOf("") }
+    var searchActive by remember { mutableStateOf(false) }
 
     // Extraire les noms de séances uniques pour le filtre
     val workoutNames = remember(workouts) {
         workouts.map { it.workout.name }.filter { it.isNotBlank() }.distinct().sorted()
     }
 
-    // Filtrer les workouts
-    val filteredWorkouts = remember(workouts, selectedFilter) {
-        if (selectedFilter == null) {
-            workouts
-        } else {
-            workouts.filter { it.workout.name == selectedFilter }
+    // Filtrer les workouts (filtre + recherche)
+    val filteredWorkouts = remember(workouts, selectedFilter, searchQuery) {
+        var result = if (selectedFilter == null) workouts
+                     else workouts.filter { it.workout.name == selectedFilter }
+        if (searchQuery.isNotBlank()) {
+            result = result.filter { wwe ->
+                matchesSearch(wwe.workout.name, searchQuery) ||
+                matchesSearch(wwe.workout.notes, searchQuery) ||
+                wwe.exercises.any { matchesSearch(it.exercise.name, searchQuery) }
+            }
         }
+        result
     }
 
     Scaffold(
         topBar = {
             TopAppBar(
                 title = {
-                    Text(
-                        "Historique",
-                        style = MaterialTheme.typography.headlineMedium
-                    )
+                    if (searchActive) {
+                        TextField(
+                            value = searchQuery,
+                            onValueChange = { searchQuery = it },
+                            placeholder = { Text("Exercice, séance, note…") },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = TextFieldDefaults.colors(
+                                focusedContainerColor = Color.Transparent,
+                                unfocusedContainerColor = Color.Transparent,
+                                focusedIndicatorColor = Color.Transparent,
+                                unfocusedIndicatorColor = Color.Transparent
+                            )
+                        )
+                    } else {
+                        Text(
+                            "Historique",
+                            style = MaterialTheme.typography.headlineMedium
+                        )
+                    }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = Background,
                     titleContentColor = OnBackground
                 ),
+                navigationIcon = {
+                    if (searchActive) {
+                        IconButton(onClick = {
+                            searchActive = false
+                            searchQuery = ""
+                        }) {
+                            Icon(Icons.Default.ArrowBack, contentDescription = "Fermer la recherche", tint = OnSurfaceVariant)
+                        }
+                    }
+                },
                 actions = {
-                    // Filtre par type de séance
-                    if (workoutNames.isNotEmpty()) {
-                        Box {
-                            IconButton(onClick = { showFilterMenu = true }) {
-                                Icon(
-                                    Icons.Default.FilterList,
-                                    contentDescription = "Filtrer",
-                                    tint = if (selectedFilter != null) Primary else OnSurfaceVariant
-                                )
-                            }
-                            DropdownMenu(
-                                expanded = showFilterMenu,
-                                onDismissRequest = { showFilterMenu = false }
-                            ) {
-                                DropdownMenuItem(
-                                    text = { Text("Toutes les séances") },
-                                    onClick = {
-                                        selectedFilter = null
-                                        showFilterMenu = false
-                                    },
-                                    leadingIcon = {
-                                        if (selectedFilter == null) {
-                                            Icon(Icons.Default.Check, contentDescription = null, tint = Primary)
-                                        }
-                                    }
-                                )
-                                Divider()
-                                workoutNames.forEach { name ->
+                    // Recherche
+                    if (!searchActive) {
+                        IconButton(onClick = { searchActive = true }) {
+                            Icon(
+                                Icons.Default.Search,
+                                contentDescription = "Rechercher",
+                                tint = OnSurfaceVariant
+                            )
+                        }
+                    } else if (searchQuery.isNotEmpty()) {
+                        IconButton(onClick = { searchQuery = "" }) {
+                            Icon(Icons.Default.Close, contentDescription = "Effacer", tint = OnSurfaceVariant)
+                        }
+                    }
+
+                    if (!searchActive) {
+                        // Filtre par type de séance
+                        if (workoutNames.isNotEmpty()) {
+                            Box {
+                                IconButton(onClick = { showFilterMenu = true }) {
+                                    Icon(
+                                        Icons.Default.FilterList,
+                                        contentDescription = "Filtrer",
+                                        tint = if (selectedFilter != null) Primary else OnSurfaceVariant
+                                    )
+                                }
+                                DropdownMenu(
+                                    expanded = showFilterMenu,
+                                    onDismissRequest = { showFilterMenu = false }
+                                ) {
                                     DropdownMenuItem(
-                                        text = { Text(name) },
+                                        text = { Text("Toutes les séances") },
                                         onClick = {
-                                            selectedFilter = name
+                                            selectedFilter = null
                                             showFilterMenu = false
                                         },
                                         leadingIcon = {
-                                            if (selectedFilter == name) {
+                                            if (selectedFilter == null) {
                                                 Icon(Icons.Default.Check, contentDescription = null, tint = Primary)
                                             }
                                         }
                                     )
+                                    Divider()
+                                    workoutNames.forEach { name ->
+                                        DropdownMenuItem(
+                                            text = { Text(name) },
+                                            onClick = {
+                                                selectedFilter = name
+                                                showFilterMenu = false
+                                            },
+                                            leadingIcon = {
+                                                if (selectedFilter == name) {
+                                                    Icon(Icons.Default.Check, contentDescription = null, tint = Primary)
+                                                }
+                                            }
+                                        )
+                                    }
                                 }
                             }
                         }
-                    }
 
-                    // Toggle vue liste/calendrier
-                    IconButton(onClick = {
-                        viewMode = if (viewMode == HistoryViewMode.LIST)
-                            HistoryViewMode.CALENDAR else HistoryViewMode.LIST
-                    }) {
-                        Icon(
-                            if (viewMode == HistoryViewMode.LIST) Icons.Default.CalendarMonth else Icons.Default.List,
-                            contentDescription = "Changer de vue",
-                            tint = OnSurfaceVariant
-                        )
+                        // Toggle vue liste/calendrier
+                        IconButton(onClick = {
+                            viewMode = if (viewMode == HistoryViewMode.LIST)
+                                HistoryViewMode.CALENDAR else HistoryViewMode.LIST
+                        }) {
+                            Icon(
+                                if (viewMode == HistoryViewMode.LIST) Icons.Default.CalendarMonth else Icons.Default.List,
+                                contentDescription = "Changer de vue",
+                                tint = OnSurfaceVariant
+                            )
+                        }
                     }
                 }
             )
@@ -164,6 +216,30 @@ fun HistoryScreen(
                     )
                 }
             }
+        } else if (searchQuery.isNotBlank() && filteredWorkouts.isEmpty()) {
+            // Recherche sans résultats
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(paddingValues),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Icon(
+                        Icons.Default.Search,
+                        contentDescription = null,
+                        modifier = Modifier.size(64.dp),
+                        tint = OnSurfaceVariant
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text(
+                        text = "Aucun résultat pour \"$searchQuery\"",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = OnSurfaceVariant,
+                        textAlign = TextAlign.Center
+                    )
+                }
+            }
         } else {
             when (viewMode) {
                 HistoryViewMode.LIST -> {
@@ -175,17 +251,33 @@ fun HistoryScreen(
                         verticalArrangement = Arrangement.spacedBy(12.dp),
                         contentPadding = PaddingValues(vertical = 16.dp)
                     ) {
-                        // Afficher le filtre actif
-                        if (selectedFilter != null) {
+                        // Indicateurs actifs (filtre ou recherche)
+                        if (selectedFilter != null || searchQuery.isNotBlank()) {
                             item {
-                                FilterChip(
-                                    selected = true,
-                                    onClick = { selectedFilter = null },
-                                    label = { Text(selectedFilter!!) },
-                                    trailingIcon = {
-                                        Icon(Icons.Default.Close, contentDescription = "Retirer le filtre", modifier = Modifier.size(16.dp))
+                                Row(
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    if (searchQuery.isNotBlank()) {
+                                        FilterChip(
+                                            selected = true,
+                                            onClick = { searchQuery = ""; searchActive = false },
+                                            label = { Text("\"$searchQuery\" • ${filteredWorkouts.size} résultat(s)") },
+                                            trailingIcon = {
+                                                Icon(Icons.Default.Close, contentDescription = "Effacer", modifier = Modifier.size(16.dp))
+                                            }
+                                        )
                                     }
-                                )
+                                    if (selectedFilter != null) {
+                                        FilterChip(
+                                            selected = true,
+                                            onClick = { selectedFilter = null },
+                                            label = { Text(selectedFilter!!) },
+                                            trailingIcon = {
+                                                Icon(Icons.Default.Close, contentDescription = "Retirer le filtre", modifier = Modifier.size(16.dp))
+                                            }
+                                        )
+                                    }
+                                }
                             }
                         }
 
@@ -195,7 +287,8 @@ fun HistoryScreen(
                         ) { workoutWithExercises ->
                             WorkoutHistoryCard(
                                 workoutWithExercises = workoutWithExercises,
-                                onDelete = { workoutToDelete = workoutWithExercises.workout }
+                                onDelete = { workoutToDelete = workoutWithExercises.workout },
+                                onEdit = { workoutToEdit = workoutWithExercises }
                             )
                         }
                     }
@@ -234,6 +327,18 @@ fun HistoryScreen(
                 TextButton(onClick = { workoutToDelete = null }) {
                     Text("Annuler")
                 }
+            }
+        )
+    }
+
+    // Dialog d'édition de séance
+    workoutToEdit?.let { workoutWithExercises ->
+        EditWorkoutDialog(
+            workoutWithExercises = workoutWithExercises,
+            onDismiss = { workoutToEdit = null },
+            onSave = { updatedWorkout, updatedSets ->
+                viewModel.updateWorkoutHistory(updatedWorkout, updatedSets)
+                workoutToEdit = null
             }
         )
     }
@@ -447,6 +552,7 @@ private fun CalendarWorkoutItem(workoutWithExercises: WorkoutWithExercises) {
 fun WorkoutHistoryCard(
     workoutWithExercises: WorkoutWithExercises,
     onDelete: () -> Unit,
+    onEdit: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val workout = workoutWithExercises.workout
@@ -508,6 +614,14 @@ fun WorkoutHistoryCard(
                         )
                     }
                     
+                    IconButton(onClick = onEdit) {
+                        Icon(
+                            Icons.Default.Edit,
+                            contentDescription = "Modifier",
+                            tint = Primary
+                        )
+                    }
+
                     IconButton(onClick = onDelete) {
                         Icon(
                             Icons.Default.Delete,
@@ -649,6 +763,185 @@ fun StatChip(
             text = label,
             style = MaterialTheme.typography.labelSmall,
             color = OnSurfaceVariant
+        )
+    }
+}
+
+/**
+ * Dialog pour modifier une séance de l'historique
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun EditWorkoutDialog(
+    workoutWithExercises: WorkoutWithExercises,
+    onDismiss: () -> Unit,
+    onSave: (Workout, List<com.gymtracker.app.data.model.ExerciseSet>) -> Unit
+) {
+    val workout = workoutWithExercises.workout
+    var editedNotes by remember { mutableStateOf(workout.notes) }
+
+    // Créer une copie mutable des sets pour l'édition
+    val editedSets = remember {
+        mutableStateMapOf<Long, com.gymtracker.app.data.model.ExerciseSet>().apply {
+            workoutWithExercises.exercises.forEach { exerciseWithSets ->
+                exerciseWithSets.sets.forEach { set ->
+                    this[set.id] = set
+                }
+            }
+        }
+    }
+
+    val dateFormat = remember { SimpleDateFormat("EEEE d MMMM yyyy", Locale.FRANCE) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Column {
+                Text("Modifier la séance")
+                Text(
+                    text = dateFormat.format(Date(workout.date)).replaceFirstChar { it.uppercase() },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = OnSurfaceVariant
+                )
+            }
+        },
+        text = {
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 400.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                // Notes
+                item {
+                    OutlinedTextField(
+                        value = editedNotes,
+                        onValueChange = { editedNotes = it },
+                        label = { Text("Notes") },
+                        modifier = Modifier.fillMaxWidth(),
+                        minLines = 2,
+                        maxLines = 4
+                    )
+                }
+
+                // Exercices
+                workoutWithExercises.exercises.forEach { exerciseWithSets ->
+                    item {
+                        Text(
+                            text = exerciseWithSets.exercise.name,
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = Primary
+                        )
+                    }
+
+                    // Séries de cet exercice
+                    exerciseWithSets.sets.sortedBy { it.setNumber }.forEach { set ->
+                        item {
+                            val currentSet = editedSets[set.id] ?: set
+                            EditableSetRow(
+                                set = currentSet,
+                                onSetUpdated = { updatedSet ->
+                                    editedSets[set.id] = updatedSet
+                                }
+                            )
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = {
+                    val updatedWorkout = workout.copy(notes = editedNotes)
+                    onSave(updatedWorkout, editedSets.values.toList())
+                }
+            ) {
+                Text("Enregistrer", color = Primary)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Annuler")
+            }
+        }
+    )
+}
+
+/**
+ * Ligne de série éditable pour le dialog d'édition
+ */
+@Composable
+fun EditableSetRow(
+    set: com.gymtracker.app.data.model.ExerciseSet,
+    onSetUpdated: (com.gymtracker.app.data.model.ExerciseSet) -> Unit
+) {
+    var weightText by remember(set.id) { mutableStateOf(if (set.weight == 0f) "" else set.weight.toString()) }
+    var repsText by remember(set.id) { mutableStateOf(if (set.reps == 0) "" else set.reps.toString()) }
+    var miorepText by remember(set.id) { mutableStateOf(if (set.miorep == 0) "" else set.miorep.toString()) }
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(8.dp))
+            .background(SurfaceVariant)
+            .padding(8.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        // Numéro de série
+        Box(
+            modifier = Modifier
+                .size(28.dp)
+                .clip(CircleShape)
+                .background(Primary),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                text = "${set.setNumber}",
+                color = Color.White,
+                fontWeight = FontWeight.Bold,
+                style = MaterialTheme.typography.labelMedium
+            )
+        }
+
+        // Poids
+        OutlinedTextField(
+            value = weightText,
+            onValueChange = {
+                weightText = it
+                val newWeight = it.replace(",", ".").toFloatOrNull() ?: 0f
+                onSetUpdated(set.copy(weight = newWeight))
+            },
+            label = { Text("kg") },
+            modifier = Modifier.weight(1f),
+            singleLine = true
+        )
+
+        // Reps
+        OutlinedTextField(
+            value = repsText,
+            onValueChange = {
+                repsText = it
+                val newReps = it.toIntOrNull() ?: 0
+                onSetUpdated(set.copy(reps = newReps))
+            },
+            label = { Text("Reps") },
+            modifier = Modifier.weight(1f),
+            singleLine = true
+        )
+
+        // Miorep
+        OutlinedTextField(
+            value = miorepText,
+            onValueChange = {
+                miorepText = it
+                val newMiorep = it.toIntOrNull() ?: 0
+                onSetUpdated(set.copy(miorep = newMiorep))
+            },
+            label = { Text("Mio") },
+            modifier = Modifier.weight(0.7f),
+            singleLine = true
         )
     }
 }

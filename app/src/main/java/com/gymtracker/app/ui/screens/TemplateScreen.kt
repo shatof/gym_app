@@ -23,6 +23,7 @@ import com.gymtracker.app.data.model.SessionTemplate
 import com.gymtracker.app.data.model.TemplateExercise
 import com.gymtracker.app.data.model.TemplateWithExercises
 import com.gymtracker.app.ui.theme.*
+import com.gymtracker.app.util.matchesSearch
 import com.gymtracker.app.ui.viewmodel.TemplateViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -694,15 +695,15 @@ private fun AddTemplateExerciseDialog(
 
             // D'abord les exercices par défaut qui matchent
             val fromDefault = defaultExercises.filter {
-                it.contains(name, ignoreCase = true) && it != name
+                matchesSearch(it, name) && it != name
             }
             // Ensuite les exercices existants
             val fromExisting = existingExerciseNames.filter {
-                it.contains(name, ignoreCase = true) && it != name && !fromDefault.contains(it)
+                matchesSearch(it, name) && it != name && !fromDefault.contains(it)
             }
             // Enfin tous les autres
             val fromAll = allExercises.filter {
-                it.contains(name, ignoreCase = true) && it != name && !fromDefault.contains(it) && !fromExisting.contains(it)
+                matchesSearch(it, name) && it != name && !fromDefault.contains(it) && !fromExisting.contains(it)
             }
 
             (fromDefault + fromExisting + fromAll).take(3)

@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(find d:/SessionGoron/Documents/apprentissage/gym_app -path *test* -type f)",
+      "Bash(ls \"d:\\\\SessionGoron\\\\Documents\\\\apprentissage\\\\gym_app\\\\app\\\\src\\\\main\\\\res\\\\xml\"\" 2>/dev/null || echo \"No xml dir \")"
+    ]
+  }
+}

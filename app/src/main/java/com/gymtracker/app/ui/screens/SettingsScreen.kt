@@ -33,8 +33,10 @@ import com.google.gson.GsonBuilder
 import com.gymtracker.app.data.SettingsManager
 import com.gymtracker.app.data.ThemeColor
 import com.gymtracker.app.data.model.ExportData
+import com.gymtracker.app.data.model.TemplateExportData
 import com.gymtracker.app.data.repository.GymRepository
 import com.gymtracker.app.ui.theme.*
+import com.gymtracker.app.util.matchesSearch
 import kotlinx.coroutines.launch
 import java.io.File
 import java.io.FileOutputStream
@@ -65,12 +67,23 @@ fun SettingsScreen(
     var showWelcomeTextDialog by remember { mutableStateOf(false) }
 
     // Launcher pour sélectionner le fichier d'import
-    val importLauncher = rememberLauncherForActivityResult(
+    val importDataLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
     ) { uri: Uri? ->
         uri?.let {
             scope.launch {
                 val result = importData(context, repository, it)
+                showImportResultDialog = result
+            }
+        }
+    }
+
+    val importTemplatesLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        uri?.let {
+            scope.launch {
+                val result = importTemplates(context, repository, it)
                 showImportResultDialog = result
             }
         }
@@ -123,7 +136,7 @@ fun SettingsScreen(
                     SettingsItem(
                         icon = Icons.Default.Upload,
                         title = "Exporter les données",
-                        subtitle = "Historique, templates et performances",
+                        subtitle = "Historique, séances et performances",
                         onClick = {
                             scope.launch {
                                 exportData(context, repository, onShowSnackbar)
@@ -138,9 +151,42 @@ fun SettingsScreen(
                         title = "Importer les données",
                         subtitle = "Restaurer depuis un fichier JSON",
                         onClick = {
-                            importLauncher.launch("application/json")
+                            importDataLauncher.launch("application/json")
                         }
                     )
+
+                    Divider(color = SurfaceVariant, modifier = Modifier.padding(vertical = 8.dp))
+
+                    Text(
+                        "Templates de séances",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = OnSurfaceVariant
+                    )
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        TextButton(
+                            onClick = {
+                                scope.launch {
+                                    exportTemplates(context, repository, onShowSnackbar)
+                                }
+                            }
+                        ) {
+                            Icon(Icons.Default.UploadFile, contentDescription = null)
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Exporter")
+                        }
+
+                        TextButton(
+                            onClick = { importTemplatesLauncher.launch("application/json") }
+                        ) {
+                            Icon(Icons.Default.FileDownload, contentDescription = null)
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Importer")
+                        }
+                    }
                 }
             }
 
@@ -357,7 +403,7 @@ fun SettingsScreen(
         var expanded by remember { mutableStateOf(false) }
 
         val filteredExercises = SettingsManager.ALL_EXERCISES.filter {
-            it.contains(newExercise, ignoreCase = true) && !commonExercises.contains(it)
+            matchesSearch(it, newExercise) && !commonExercises.contains(it)
         }.take(6)
 
         AlertDialog(
@@ -725,6 +771,78 @@ private suspend fun importData(
         "Import réussi !\n• ${importedCount.first} séance(s) importée(s)\n• ${importedCount.second} exercice(s) importé(s)"
     } catch (e: Exception) {
         "Erreur lors de l'import : ${e.message}"
+    }
+}
+
+private suspend fun exportTemplates(
+    context: Context,
+    repository: GymRepository,
+    onShowSnackbar: (String) -> Unit
+) {
+    try {
+        val exportData = repository.exportTemplatesData()
+        val gson = GsonBuilder().setPrettyPrinting().create()
+        val json = gson.toJson(exportData)
+
+        val dateFormat = SimpleDateFormat("dd-MM-yy-HH'h'mm", Locale.getDefault())
+        val fileName = "templates-${dateFormat.format(Date())}.json"
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            val contentValues = ContentValues().apply {
+                put(MediaStore.Downloads.DISPLAY_NAME, fileName)
+                put(MediaStore.Downloads.MIME_TYPE, "application/json")
+                put(MediaStore.Downloads.IS_PENDING, 1)
+            }
+
+            val resolver = context.contentResolver
+            val uri = resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, contentValues)
+
+            uri?.let {
+                resolver.openOutputStream(it)?.use { outputStream ->
+                    outputStream.write(json.toByteArray())
+                }
+
+                contentValues.clear()
+                contentValues.put(MediaStore.Downloads.IS_PENDING, 0)
+                resolver.update(uri, contentValues, null, null)
+
+                onShowSnackbar("Templates exportés : $fileName")
+            } ?: run {
+                onShowSnackbar("Erreur : impossible de créer le fichier")
+            }
+        } else {
+            @Suppress("DEPRECATION")
+            val downloadsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+            val file = File(downloadsDir, fileName)
+            FileOutputStream(file).use { it.write(json.toByteArray()) }
+            onShowSnackbar("Templates exportés : $fileName")
+        }
+    } catch (e: Exception) {
+        onShowSnackbar("Erreur export templates : ${e.message}")
+    }
+}
+
+private suspend fun importTemplates(
+    context: Context,
+    repository: GymRepository,
+    uri: Uri
+): String {
+    return try {
+        val inputStream = context.contentResolver.openInputStream(uri)
+        val json = inputStream?.bufferedReader()?.use { it.readText() } ?: ""
+        inputStream?.close()
+
+        if (json.isBlank()) {
+            return "Erreur : fichier vide"
+        }
+
+        val gson = Gson()
+        val exportData = gson.fromJson(json, TemplateExportData::class.java)
+        val importedCount = repository.importTemplatesData(exportData)
+
+        "Import templates réussi !\n• ${importedCount.first} template(s) importé(s)\n• ${importedCount.second} exercice(s) importé(s)"
+    } catch (e: Exception) {
+        "Erreur import templates : ${e.message}"
     }
 }
 

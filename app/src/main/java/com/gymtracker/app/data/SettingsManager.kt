@@ -33,6 +33,10 @@ class SettingsManager(private val context: Context) {
         private val COMMON_EXERCISES = stringPreferencesKey("common_exercises")
         private val WELCOME_TEXT = stringPreferencesKey("welcome_text")
         private val WELCOME_IMAGE_URI = stringPreferencesKey("welcome_image_uri")
+        private val CUSTOM_MUSCLE_GROUPS = stringPreferencesKey("custom_muscle_groups")
+
+        // Map mutable pour les mappings personnalisés (chargés au démarrage)
+        private val customMuscleGroupMappings = mutableMapOf<String, MuscleGroup>()
 
         // Texte d'accueil par défaut
         const val DEFAULT_WELCOME_TEXT = "let's gooooooo"
@@ -239,7 +243,10 @@ class SettingsManager(private val context: Context) {
          * Récupère le groupe musculaire d'un exercice
          */
         fun getMuscleGroup(exerciseName: String): MuscleGroup {
-            // Cherche d'abord une correspondance exacte
+            // Cherche d'abord dans les mappings personnalisés
+            customMuscleGroupMappings[exerciseName]?.let { return it }
+
+            // Cherche une correspondance exacte dans les mappings par défaut
             EXERCISE_TO_MUSCLE_GROUP[exerciseName]?.let { return it }
 
             // Cherche une correspondance partielle (ignorer la casse)
@@ -252,7 +259,7 @@ class SettingsManager(private val context: Context) {
 
             // Détection par mots-clés
             return when {
-                lowerName.contains("pec") || lowerName.contains("développé couché") || lowerName.contains("dips pec") -> MuscleGroup.CHEST
+                lowerName.contains("pec") || lowerName.contains("développé couché") || lowerName.contains("dips pec") || lowerName.contains("chest") -> MuscleGroup.CHEST
                 lowerName.contains("traction") || lowerName.contains("rowing") || lowerName.contains("tirage") || lowerName.contains("dos") -> MuscleGroup.BACK
                 lowerName.contains("épaule") || lowerName.contains("latéral") || lowerName.contains("militaire") -> MuscleGroup.SHOULDERS
                 lowerName.contains("bicep") || lowerName.contains("curl") -> MuscleGroup.BICEPS
@@ -261,6 +268,37 @@ class SettingsManager(private val context: Context) {
                 lowerName.contains("abdos") || lowerName.contains("crunch") || lowerName.contains("planche") || lowerName.contains("gainage") -> MuscleGroup.ABS
                 else -> MuscleGroup.OTHER
             }
+        }
+
+        /**
+         * Définit un mapping personnalisé pour un exercice
+         */
+        fun setCustomMuscleGroup(exerciseName: String, muscleGroup: MuscleGroup) {
+            customMuscleGroupMappings[exerciseName] = muscleGroup
+        }
+
+        /**
+         * Charge les mappings personnalisés depuis une chaîne
+         */
+        fun loadCustomMappings(data: String) {
+            customMuscleGroupMappings.clear()
+            if (data.isNotBlank()) {
+                data.split("|||").forEach { entry ->
+                    val parts = entry.split(":::")
+                    if (parts.size == 2) {
+                        try {
+                            customMuscleGroupMappings[parts[0]] = MuscleGroup.valueOf(parts[1])
+                        } catch (e: Exception) { /* ignorer */ }
+                    }
+                }
+            }
+        }
+
+        /**
+         * Sérialise les mappings personnalisés
+         */
+        fun serializeCustomMappings(): String {
+            return customMuscleGroupMappings.entries.joinToString("|||") { "${it.key}:::${it.value.name}" }
         }
     }
 
@@ -348,6 +386,25 @@ class SettingsManager(private val context: Context) {
             } else {
                 preferences.remove(WELCOME_IMAGE_URI)
             }
+        }
+    }
+
+    // Mappings personnalisés exercice -> groupe musculaire
+    val customMuscleGroups: Flow<String> = context.dataStore.data.map { preferences ->
+        preferences[CUSTOM_MUSCLE_GROUPS] ?: ""
+    }
+
+    suspend fun loadCustomMuscleGroupMappings() {
+        context.dataStore.data.collect { preferences ->
+            val data = preferences[CUSTOM_MUSCLE_GROUPS] ?: ""
+            Companion.loadCustomMappings(data)
+        }
+    }
+
+    suspend fun setExerciseMuscleGroup(exerciseName: String, muscleGroup: Companion.MuscleGroup) {
+        Companion.setCustomMuscleGroup(exerciseName, muscleGroup)
+        context.dataStore.edit { preferences ->
+            preferences[CUSTOM_MUSCLE_GROUPS] = Companion.serializeCustomMappings()
         }
     }
 }

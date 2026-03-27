@@ -77,7 +77,23 @@ class ProgressViewModel(private val repository: GymRepository) : ViewModel() {
     fun selectExercise(exerciseName: String) {
         _selectedExercise.value = exerciseName
     }
-    
+
+    // ────────────────────────────────────────────────
+    // Groupe A — stats hebdomadaires
+    // ────────────────────────────────────────────────
+
+    private val _weeklyStats = MutableStateFlow<com.gymtracker.app.data.model.WeeklyStats?>(null)
+    val weeklyStats: StateFlow<com.gymtracker.app.data.model.WeeklyStats?> = _weeklyStats.asStateFlow()
+
+    init {
+        // Recalcule dès le démarrage et à chaque nouvelle séance terminée
+        viewModelScope.launch {
+            repository.completedWorkoutsWithExercises.collect {
+                _weeklyStats.value = repository.getWeeklyStats()
+            }
+        }
+    }
+
     // Factory
     companion object {
         fun provideFactory(repository: GymRepository): ViewModelProvider.Factory {
